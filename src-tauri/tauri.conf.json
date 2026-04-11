@@ -1,52 +1,52 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Token Proxy",
-  "version": "0.1.67",
-  "identifier": "com.mxyhi.token-proxy",
-  "build": {
-    "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "Token Proxy",
-        "width": 1064,
-        "height": 658,
-        "visible": false
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": true,
-    "createUpdaterArtifacts": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ]
-  },
-  "plugins": {
-    "deep-link": {
-      "desktop": {
-        "schemes": [
-          "kiro"
-        ]
-      }
-    },
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDAzMTE2N0E5RTRGNkE4NzgKUldSNHFQYmtxV2NSQTBsUW9ML0lmS0k0a05iSkVXc1VKNnNxZkdsZTRHcGxyODZnVUQ0T21zTEQK",
-      "endpoints": [
-        "https://github.com/mxyhi/token_proxy/releases/latest/download/latest.json"
-      ]
-    }
-  }
+    "$schema":  "https://schema.tauri.app/config/2",
+    "productName":  "Token Proxy",
+    "version":  "0.1.68",
+    "identifier":  "com.mxyhi.token-proxy",
+    "build":  {
+                  "beforeDevCommand":  "pnpm dev",
+                  "devUrl":  "http://localhost:1420",
+                  "beforeBuildCommand":  "pnpm build",
+                  "frontendDist":  "../dist"
+              },
+    "app":  {
+                "windows":  [
+                                {
+                                    "title":  "Token Proxy",
+                                    "width":  1064,
+                                    "height":  658,
+                                    "visible":  false
+                                }
+                            ],
+                "security":  {
+                                 "csp":  null
+                             }
+            },
+    "bundle":  {
+                   "active":  true,
+                   "createUpdaterArtifacts":  true,
+                   "targets":  "all",
+                   "icon":  [
+                                "icons/32x32.png",
+                                "icons/128x128.png",
+                                "icons/128x128@2x.png",
+                                "icons/icon.icns",
+                                "icons/icon.ico"
+                            ]
+               },
+    "plugins":  {
+                    "deep-link":  {
+                                      "desktop":  {
+                                                      "schemes":  [
+                                                                      "kiro"
+                                                                  ]
+                                                  }
+                                  },
+                    "updater":  {
+                                    "pubkey":  "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZFOTNDM0NCMzkxMjA5RjAKUldUd0NSSTV5OE9UYmdKNzVTSlAxNHRWUndkUnRtUXFQQUcybXh4UG1TL1pvQjdJaHpIYktsbWgK",
+                                    "endpoints":  [
+                                                      "https://github.com/aftely1337/token_proxy/releases/latest/download/latest.json"
+                                                  ]
+                                }
+                }
 }
