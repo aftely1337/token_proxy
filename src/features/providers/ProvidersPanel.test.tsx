@@ -538,8 +538,11 @@ describe("providers/ProvidersPanel", () => {
     render(<ProvidersPanel />);
 
     expect(await screen.findByText("plus@example.com")).toBeInTheDocument();
-    expect(within(getAccountsTable()).getByText(new RegExp(m.codex_quota_session(), "i"))).toBeInTheDocument();
-    expect(within(getAccountsTable()).getByText(new RegExp(m.codex_quota_weekly(), "i"))).toBeInTheDocument();
+    const row = await findAccountRow("plus@example.com");
+    expect(row).toHaveTextContent(m.codex_quota_session());
+    expect(row).toHaveTextContent(m.codex_quota_weekly());
+    expect(row.textContent).toContain("·");
+    expect(row.textContent).not.toContain("?");
     expect(within(getAccountsTable()).queryByText(/2 items/i)).not.toBeInTheDocument();
   });
 

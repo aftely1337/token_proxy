@@ -679,7 +679,7 @@ function summarizeCodexQuotaItems(items: ProviderAccountQuotaDetailItem[]) {
     return PLACEHOLDER;
   }
 
-  const visibleItems = items.slice(0, 2).map((item) => `${item.name} ? ${item.summary}`);
+  const visibleItems = items.slice(0, 2).map((item) => `${item.name} · ${item.summary}`);
   if (items.length <= 2) {
     return visibleItems.join(" / ");
   }
