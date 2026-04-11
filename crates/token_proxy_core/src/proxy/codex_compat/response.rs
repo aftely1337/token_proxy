@@ -3,7 +3,6 @@ use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::super::sse::SseEventParser;
 use super::extract_tool_name_map_from_request_body;
 
 pub(crate) fn codex_response_to_chat(
@@ -33,95 +32,17 @@ pub(crate) fn codex_response_to_responses(
 }
 
 fn parse_codex_response(bytes: &Bytes) -> Result<Map<String, Value>, String> {
-    let value = parse_codex_response_value(bytes)?;
+    let value: Value = serde_json::from_slice(bytes).map_err(|_| {
+        format!(
+            "Codex upstream returned non-JSON success payload: {}",
+            response_text(bytes)
+        )
+    })?;
     if let Some(message) = extract_error_message(&value) {
         return Err(message);
     }
     extract_response_object(&value)
         .ok_or_else(|| "Codex success response missing response object.".to_string())
-}
-
-fn parse_codex_response_value(bytes: &Bytes) -> Result<Value, String> {
-    if let Ok(value) = serde_json::from_slice::<Value>(bytes) {
-        return Ok(value);
-    }
-
-    if let Some(value) = parse_codex_sse_terminal_value(bytes)? {
-        return Ok(value);
-    }
-
-    Err(format!(
-        "Codex upstream returned non-JSON success payload: {}",
-        response_text(bytes)
-    ))
-}
-
-fn parse_codex_sse_terminal_value(bytes: &Bytes) -> Result<Option<Value>, String> {
-    let mut parser = SseEventParser::new();
-    let mut events = Vec::new();
-    parser.push_chunk(bytes, |data| events.push(data));
-    parser.finish(|data| events.push(data));
-    if events.is_empty() {
-        return Ok(None);
-    }
-
-    let mut terminal = None;
-    for data in events {
-        if data == "[DONE]" {
-            continue;
-        }
-        let value = match serde_json::from_str::<Value>(&data) {
-            Ok(value) => value,
-            Err(_) => {
-                return Err(format!(
-                    "Codex upstream emitted invalid JSON stream event: {}",
-                    truncate_event_text(&data)
-                ));
-            }
-        };
-        match value.get("type").and_then(Value::as_str) {
-            Some("response.failed" | "error") => {
-                return Err(stream_error_message(&value));
-            }
-            Some("response.completed" | "response.incomplete") => {
-                terminal = Some(value);
-            }
-            _ => {}
-        }
-    }
-
-    if terminal.is_some() {
-        return Ok(terminal);
-    }
-
-    Err("Codex upstream stream ended before response.completed".to_string())
-}
-
-fn stream_error_message(value: &Value) -> String {
-    if let Some(error) = value.get("error") {
-        return format!("Codex upstream stream failed: {}", error_message(error));
-    }
-    if let Some(message) = value.get("message") {
-        return format!("Codex upstream stream failed: {}", error_message(message));
-    }
-    format!(
-        "Codex upstream stream failed: {}",
-        truncate_event_text(&value.to_string())
-    )
-}
-
-fn truncate_event_text(text: &str) -> String {
-    const LIMIT: usize = 1024;
-    if text.len() <= LIMIT {
-        return text.trim().to_string();
-    }
-    let end = text
-        .char_indices()
-        .map(|(index, _)| index)
-        .take_while(|index| *index <= LIMIT)
-        .last()
-        .unwrap_or(LIMIT);
-    format!("{}... (truncated)", text[..end].trim())
 }
 
 fn extract_response_object(value: &Value) -> Option<Map<String, Value>> {
