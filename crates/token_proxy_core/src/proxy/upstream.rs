@@ -148,6 +148,7 @@ pub(super) async fn forward_upstream_request(
     meta: &RequestMeta,
     request_auth: &RequestAuth,
     client_gemini_api_key: Option<String>,
+    explicit_target_upstream_id: Option<&str>,
     response_transform: FormatTransform,
     request_detail: Option<RequestDetailSnapshot>,
 ) -> ForwardUpstreamResult {
@@ -178,6 +179,7 @@ pub(super) async fn forward_upstream_request(
         headers,
         body,
         meta,
+        explicit_target_upstream_id,
         request_auth,
         client_gemini_api_key.as_deref(),
         response_transform,
@@ -421,14 +423,16 @@ async fn run_upstream_groups(
     headers: &HeaderMap,
     body: &ReplayableBody,
     meta: &RequestMeta,
+    explicit_target_upstream_id: Option<&str>,
     request_auth: &RequestAuth,
     client_gemini_api_key: Option<&str>,
     response_transform: FormatTransform,
     request_detail: Option<RequestDetailSnapshot>,
     upstreams: &ProviderUpstreams,
 ) -> ForwardAttemptState {
-    let target_upstream_id =
-        requested_target_upstream_id(upstreams, meta.original_model.as_deref());
+    let target_upstream_id = explicit_target_upstream_id
+        .map(|value| value.to_string())
+        .or_else(|| requested_target_upstream_id(upstreams, meta.original_model.as_deref()));
     let mut summary = ForwardAttemptState::new();
     for (group_index, group) in upstreams.groups.iter().enumerate() {
         // Only rotate within the highest priority group; retry network failures before degrading.
@@ -1002,6 +1006,21 @@ async fn resolve_codex_upstream(
         .as_deref()
         .map(str::trim)
         .is_some_and(|value| !value.is_empty());
+    if let Some(account_id) = upstream
+        .codex_account_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if state.account_selector.is_cooling_down("codex", account_id) {
+            return Err(AttemptOutcome::Retryable {
+                message: format!("Codex account {account_id} is cooling down."),
+                response: None,
+                is_timeout: false,
+                should_cooldown: false,
+            });
+        }
+    }
     let ordered_account_ids = if has_pinned_account {
         None
     } else {

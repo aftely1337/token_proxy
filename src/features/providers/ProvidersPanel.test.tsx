@@ -484,7 +484,7 @@ describe("providers/ProvidersPanel", () => {
       await screen.findByRole("columnheader", { name: m.providers_table_provider() })
     ).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: m.providers_table_account() })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: m.field_priority() })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: m.field_priority() })).not.toBeInTheDocument();
     expect(within(getAccountsTable()).getByText("alice@example.com")).toBeInTheDocument();
     expect(within(getAccountsTable()).getByText("bob@example.com")).toBeInTheDocument();
     expect(within(getAccountsTable()).getByText("Kiro Cached Plan")).toBeInTheDocument();
@@ -741,7 +741,7 @@ describe("providers/ProvidersPanel", () => {
     expect(providerMocks.setCodexStatus).toHaveBeenCalledWith("codex-1", "disabled");
   });
 
-  it("saves kiro account priority from account dialog", async () => {
+  it("does not expose account priority editing in account dialog", async () => {
     const user = userEvent.setup();
     render(<ProvidersPanel />);
 
@@ -751,30 +751,10 @@ describe("providers/ProvidersPanel", () => {
       })
     );
 
-    const input = await screen.findByLabelText(m.field_priority());
-    await user.clear(input);
-    await user.type(input, "12");
-    await user.click(screen.getByRole("button", { name: m.providers_save_priority() }));
-
-    expect(providerMocks.setKiroPriority).toHaveBeenCalledWith("kiro-1", 12);
-  });
-
-  it("saves codex account priority from account dialog", async () => {
-    const user = userEvent.setup();
-    render(<ProvidersPanel />);
-
-    await user.click(
-      within(await findAccountRow("bob@example.com")).getByRole("button", {
-        name: m.providers_account_dialog_title(),
-      })
-    );
-
-    const input = await screen.findByLabelText(m.field_priority());
-    await user.clear(input);
-    await user.type(input, "21");
-    await user.click(screen.getByRole("button", { name: m.providers_save_priority() }));
-
-    expect(providerMocks.setCodexPriority).toHaveBeenCalledWith("codex-1", 21);
+    expect(screen.queryByLabelText(m.field_priority())).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: m.providers_save_priority() })
+    ).not.toBeInTheDocument();
   });
 
   it("refreshes all provider data from toolbar action", async () => {

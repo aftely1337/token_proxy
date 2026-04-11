@@ -2149,6 +2149,252 @@ fn responses_request_falls_back_to_responses_provider_when_all_codex_accounts_ar
 }
 
 #[test]
+fn responses_request_prioritizes_response_channels_between_pinned_codex_accounts() {
+    run_async(async {
+        let free = spawn_mock_upstream(
+            StatusCode::TOO_MANY_REQUESTS,
+            json!({
+                "error": { "message": "free exhausted" }
+            }),
+        )
+        .await;
+        let channel_one = spawn_mock_upstream(
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({
+                "error": { "message": "channel one busy" }
+            }),
+        )
+        .await;
+        let channel_two = spawn_mock_upstream(
+            StatusCode::OK,
+            json!({
+                "id": "resp_from_channel_two",
+                "object": "response",
+                "created_at": 123,
+                "model": "gpt-5.4",
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "id": "msg_1",
+                        "status": "completed",
+                        "role": "assistant",
+                        "content": [
+                            { "type": "output_text", "text": "from channel two" }
+                        ]
+                    }
+                ],
+                "usage": { "input_tokens": 1, "output_tokens": 2, "total_tokens": 3 }
+            }),
+        )
+        .await;
+        let plus = spawn_mock_upstream(
+            StatusCode::OK,
+            json!({
+                "id": "resp_from_plus",
+                "object": "response",
+                "created_at": 123,
+                "model": "gpt-5.4",
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "id": "msg_1",
+                        "status": "completed",
+                        "role": "assistant",
+                        "content": [
+                            { "type": "output_text", "text": "from plus" }
+                        ]
+                    }
+                ],
+                "usage": { "input_tokens": 1, "output_tokens": 2, "total_tokens": 3 }
+            }),
+        )
+        .await;
+
+        let config = config_with_runtime_upstreams(&[
+            (
+                PROVIDER_CODEX,
+                99,
+                "free",
+                free.base_url.as_str(),
+                FORMATS_RESPONSES,
+            ),
+            (
+                PROVIDER_RESPONSES,
+                50,
+                "channel-one",
+                channel_one.base_url.as_str(),
+                FORMATS_RESPONSES,
+            ),
+            (
+                PROVIDER_RESPONSES,
+                49,
+                "channel-two",
+                channel_two.base_url.as_str(),
+                FORMATS_RESPONSES,
+            ),
+            (
+                PROVIDER_CODEX,
+                0,
+                "plus",
+                plus.base_url.as_str(),
+                FORMATS_RESPONSES,
+            ),
+        ]);
+
+        let data_dir = next_test_data_dir("responses_global_priority_channels_between_codex");
+        let state = build_test_state_handle(config, data_dir.clone()).await;
+        let expires_at = (OffsetDateTime::now_utc() + TimeDuration::days(1))
+            .format(&time::format_description::well_known::Rfc3339)
+            .expect("format expires_at");
+        seed_codex_account(
+            &state,
+            "codex-free.json",
+            "codex-access-free",
+            "chatgpt-free",
+            &expires_at,
+        )
+        .await;
+        seed_codex_account(
+            &state,
+            "codex-plus.json",
+            "codex-access-plus",
+            "chatgpt-plus",
+            &expires_at,
+        )
+        .await;
+
+        let (status, json) = send_responses_request(state).await;
+        let free_requests = free.requests();
+        let channel_one_requests = channel_one.requests();
+        let channel_two_requests = channel_two.requests();
+        let plus_requests = plus.requests();
+
+        free.abort();
+        channel_one.abort();
+        channel_two.abort();
+        plus.abort();
+        let _ = std::fs::remove_dir_all(&data_dir);
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            json["output"][0]["content"][0]["text"].as_str(),
+            Some("from channel two")
+        );
+        assert_eq!(free_requests.len(), 1);
+        assert_eq!(free_requests[0].path, CODEX_RESPONSES_PATH);
+        assert_eq!(
+            free_requests[0].authorization.as_deref(),
+            Some("Bearer codex-access-free")
+        );
+        assert_eq!(channel_one_requests.len(), 1);
+        assert_eq!(channel_one_requests[0].path, RESPONSES_PATH);
+        assert_eq!(channel_two_requests.len(), 1);
+        assert_eq!(channel_two_requests[0].path, RESPONSES_PATH);
+        assert_eq!(
+            channel_two_requests[0].body["model"].as_str(),
+            Some("gpt-5")
+        );
+        assert!(plus_requests.is_empty(), "plus must run after all channels");
+    });
+}
+
+#[test]
+fn responses_request_skips_cooling_pinned_codex_account_before_channel_fallback() {
+    run_async(async {
+        let free = spawn_mock_upstream(
+            StatusCode::TOO_MANY_REQUESTS,
+            json!({
+                "error": { "message": "free exhausted" }
+            }),
+        )
+        .await;
+        let channel = spawn_mock_upstream(
+            StatusCode::OK,
+            json!({
+                "id": "resp_from_channel",
+                "object": "response",
+                "created_at": 123,
+                "model": "gpt-5.4",
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "id": "msg_1",
+                        "status": "completed",
+                        "role": "assistant",
+                        "content": [
+                            { "type": "output_text", "text": "from channel" }
+                        ]
+                    }
+                ],
+                "usage": { "input_tokens": 1, "output_tokens": 2, "total_tokens": 3 }
+            }),
+        )
+        .await;
+
+        let mut config = config_with_runtime_upstreams(&[
+            (
+                PROVIDER_CODEX,
+                99,
+                "free",
+                free.base_url.as_str(),
+                FORMATS_RESPONSES,
+            ),
+            (
+                PROVIDER_RESPONSES,
+                50,
+                "channel",
+                channel.base_url.as_str(),
+                FORMATS_RESPONSES,
+            ),
+        ]);
+        config.retryable_failure_cooldown = std::time::Duration::from_secs(15);
+
+        let data_dir = next_test_data_dir("responses_pinned_codex_cooldown_then_channel");
+        let state = build_test_state_handle(config, data_dir.clone()).await;
+        let expires_at = (OffsetDateTime::now_utc() + TimeDuration::days(1))
+            .format(&time::format_description::well_known::Rfc3339)
+            .expect("format expires_at");
+        seed_codex_account(
+            &state,
+            "codex-free.json",
+            "codex-access-free",
+            "chatgpt-free",
+            &expires_at,
+        )
+        .await;
+
+        let (first_status, first_json) = send_responses_request(state.clone()).await;
+        let (second_status, second_json) = send_responses_request(state).await;
+        let free_requests = free.requests();
+        let channel_requests = channel.requests();
+
+        free.abort();
+        channel.abort();
+        let _ = std::fs::remove_dir_all(&data_dir);
+
+        assert_eq!(first_status, StatusCode::OK);
+        assert_eq!(second_status, StatusCode::OK);
+        assert_eq!(
+            first_json["output"][0]["content"][0]["text"].as_str(),
+            Some("from channel")
+        );
+        assert_eq!(
+            second_json["output"][0]["content"][0]["text"].as_str(),
+            Some("from channel")
+        );
+        assert_eq!(
+            free_requests.len(),
+            1,
+            "cooling pinned codex account should be skipped on the next request"
+        );
+        assert_eq!(channel_requests.len(), 2);
+    });
+}
+
+#[test]
 fn responses_request_does_not_cooldown_same_codex_account_after_400() {
     run_async(async {
         let codex =

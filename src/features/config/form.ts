@@ -123,6 +123,8 @@ export function createEmptyUpstream(): UpstreamForm {
     filterSafetyIdentifier: false,
     useChatCompletionsForResponses: false,
     rewriteDeveloperRoleToSystem: false,
+    kiroAccountId: "",
+    codexAccountId: "",
     preferredEndpoint: "",
     proxyUrl: "",
     priority: "",
@@ -200,6 +202,8 @@ export function toForm(config: ProxyConfigFile): ConfigForm {
         filterSafetyIdentifier: upstream.filter_safety_identifier ?? false,
         useChatCompletionsForResponses: upstream.use_chat_completions_for_responses ?? false,
         rewriteDeveloperRoleToSystem: upstream.rewrite_developer_role_to_system ?? false,
+        kiroAccountId: upstream.kiro_account_id ?? "",
+        codexAccountId: upstream.codex_account_id ?? "",
         preferredEndpoint: upstream.preferred_endpoint ?? "",
         proxyUrl: omitNetworkFields ? "" : upstream.proxy_url ?? "",
         priority: upstream.priority === null ? "" : String(upstream.priority),
@@ -239,8 +243,8 @@ export function toPayload(form: ConfigForm): ProxyConfigFile {
         providers,
         base_url: omitNetworkFields ? "" : upstream.baseUrl.trim(),
         api_keys: apiKeys.length ? apiKeys : undefined,
-        kiro_account_id: null,
-        codex_account_id: null,
+        kiro_account_id: upstream.kiroAccountId.trim() ? upstream.kiroAccountId.trim() : null,
+        codex_account_id: upstream.codexAccountId.trim() ? upstream.codexAccountId.trim() : null,
         filter_prompt_cache_retention: upstream.filterPromptCacheRetention,
         filter_safety_identifier: upstream.filterSafetyIdentifier,
         use_chat_completions_for_responses: upstream.useChatCompletionsForResponses,
@@ -274,18 +278,12 @@ export function syncAccountBackedUpstreams(
     if (isSingleProvider(upstream, "kiro")) {
       return accountState.hasKiroAccount;
     }
-    if (isSingleProvider(upstream, "codex")) {
-      return accountState.hasCodexAccount;
-    }
     return true;
   });
 
   const next = [...filtered];
   if (accountState.hasKiroAccount && !next.some((upstream) => isSingleProvider(upstream, "kiro"))) {
     next.push(createAccountBackedUpstream("kiro"));
-  }
-  if (accountState.hasCodexAccount && !next.some((upstream) => isSingleProvider(upstream, "codex"))) {
-    next.push(createAccountBackedUpstream("codex"));
   }
   if (
     next.length === upstreams.length &&
@@ -361,6 +359,12 @@ export function validate(form: ConfigForm) {
     }
     if (providers.some((provider) => !SUPPORTED_PROVIDERS.has(provider))) {
       return { valid: false, message: m.error_upstream_provider_required({ id }) };
+    }
+    if (isSingleProvider(upstream, "codex") && !upstream.codexAccountId.trim()) {
+      return {
+        valid: false,
+        message: m.error_upstream_codex_account_required({ id }),
+      };
     }
 
     const canOmitBaseUrl =

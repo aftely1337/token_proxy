@@ -33,6 +33,8 @@ type AppViewArgs = {
   state: ConfigState;
   derived: ConfigDerived;
   proxyService: ProxyServiceState;
+  codexAccounts: ReturnType<typeof useCodexAccounts>;
+  kiroAccounts: ReturnType<typeof useKiroAccounts>;
   listActions: ConfigListActions;
   configActions: ConfigActions;
   proxyActions: ProxyServiceActions;
@@ -43,6 +45,8 @@ function buildAppViewProps({
   state,
   derived,
   proxyService,
+  codexAccounts,
+  kiroAccounts,
   listActions,
   configActions,
   proxyActions,
@@ -54,6 +58,14 @@ function buildAppViewProps({
     showLocalKey: state.showLocalKey,
     showUpstreamKeys: state.showUpstreamKeys,
     providerOptions: derived.providerOptions,
+    codexAccounts: codexAccounts.accounts,
+    codexAccountsLoading: codexAccounts.loading,
+    codexAccountsError: codexAccounts.error,
+    onRefreshCodexAccounts: codexAccounts.refresh,
+    kiroAccounts: kiroAccounts.accounts,
+    kiroAccountsLoading: kiroAccounts.loading,
+    kiroAccountsError: kiroAccounts.error,
+    onRefreshKiroAccounts: kiroAccounts.refresh,
     configPath: state.configPath,
     savedAt: state.savedAt,
     autoStartEnabled: state.autoStartEnabled,
@@ -204,6 +216,8 @@ export function ConfigScreen({ activeSectionId }: ConfigScreenProps) {
     state,
     derived,
     proxyService,
+    codexAccounts,
+    kiroAccounts,
     listActions,
     configActions,
     proxyActions,

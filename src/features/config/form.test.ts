@@ -10,6 +10,7 @@ import {
   toPayload,
   validate,
 } from "@/features/config/form";
+import { m } from "@/paraglide/messages.js";
 
 describe("config/form", () => {
   it("validates required host", () => {
@@ -57,19 +58,26 @@ describe("config/form", () => {
     expect(result.valid).toBe(false);
   });
 
-  it("allows enabled kiro and codex upstreams without binding account ids", () => {
+  it("allows enabled kiro upstreams without binding account ids", () => {
     const kiroUpstream = createEmptyUpstream();
     kiroUpstream.id = "kiro-1";
     kiroUpstream.enabled = true;
     kiroUpstream.providers = ["kiro"];
 
+    expect(validate({ ...EMPTY_FORM, upstreams: [kiroUpstream] }).valid).toBe(true);
+  });
+
+  it("requires an account id for enabled codex upstreams", () => {
     const codexUpstream = createEmptyUpstream();
     codexUpstream.id = "codex-1";
     codexUpstream.enabled = true;
     codexUpstream.providers = ["codex"];
+    codexUpstream.codexAccountId = "";
 
-    expect(validate({ ...EMPTY_FORM, upstreams: [kiroUpstream] }).valid).toBe(true);
-    expect(validate({ ...EMPTY_FORM, upstreams: [codexUpstream] }).valid).toBe(true);
+    expect(validate({ ...EMPTY_FORM, upstreams: [codexUpstream] })).toEqual({
+      valid: false,
+      message: m.error_upstream_codex_account_required({ id: "codex-1" }),
+    });
   });
 
   it("treats disabled upstream as draft (still requires id)", () => {
@@ -203,7 +211,7 @@ describe("config/form", () => {
     });
   });
 
-  it("drops legacy kiro and codex account bindings when loading config", () => {
+  it("preserves kiro and codex account bindings when loading and saving config", () => {
     const form = toForm({
       host: "127.0.0.1",
       port: 9208,
@@ -247,11 +255,13 @@ describe("config/form", () => {
 
     expect(form.upstreams[0]?.providers).toEqual(["kiro"]);
     expect(form.upstreams[1]?.providers).toEqual(["codex"]);
+    expect(form.upstreams[0]?.kiroAccountId).toBe("kiro-primary.json");
+    expect(form.upstreams[1]?.codexAccountId).toBe("codex-primary.json");
 
     const payload = toPayload(form);
 
-    expect(payload.upstreams[0]?.kiro_account_id).toBeNull();
-    expect(payload.upstreams[1]?.codex_account_id).toBeNull();
+    expect(payload.upstreams[0]?.kiro_account_id).toBe("kiro-primary.json");
+    expect(payload.upstreams[1]?.codex_account_id).toBe("codex-primary.json");
   });
 
   it("drops upstream base_url and proxy_url for kiro and codex providers", () => {
@@ -278,18 +288,18 @@ describe("config/form", () => {
     expect(payload.upstreams[1]?.proxy_url).toBeNull();
   });
 
-  it("auto-generates kiro and codex upstreams when accounts exist", () => {
+  it("auto-generates only kiro upstreams when accounts exist", () => {
     const upstreams = syncAccountBackedUpstreams([], {
       hasKiroAccount: true,
       hasCodexAccount: true,
     });
 
-    expect(upstreams.map((item) => item.id)).toEqual(["kiro-default", "codex-default"]);
-    expect(upstreams.map((item) => item.providers)).toEqual([["kiro"], ["codex"]]);
+    expect(upstreams.map((item) => item.id)).toEqual(["kiro-default"]);
+    expect(upstreams.map((item) => item.providers)).toEqual([["kiro"]]);
     expect(upstreams.every((item) => item.enabled)).toBe(true);
   });
 
-  it("removes kiro and codex upstreams when accounts disappear", () => {
+  it("removes kiro upstreams but preserves explicit codex upstreams when accounts disappear", () => {
     const regular = createEmptyUpstream();
     regular.id = "openai-main";
     regular.providers = ["openai"];
@@ -299,15 +309,17 @@ describe("config/form", () => {
     kiro.providers = ["kiro"];
 
     const codex = createEmptyUpstream();
-    codex.id = "codex-default";
+    codex.id = "codex-free";
     codex.providers = ["codex"];
+    codex.codexAccountId = "codex-free.json";
+    codex.enabled = true;
 
     const upstreams = syncAccountBackedUpstreams([regular, kiro, codex], {
       hasKiroAccount: false,
       hasCodexAccount: false,
     });
 
-    expect(upstreams).toEqual([regular]);
+    expect(upstreams).toEqual([regular, codex]);
   });
 
   it("serializes upstream no data timeout seconds", () => {

@@ -41,7 +41,9 @@ import type {
   ProxyServiceRequestState,
   ProxyServiceStatus,
 } from "@/features/config/types";
+import type { CodexAccountSummary } from "@/features/codex/types";
 import { DashboardPanel } from "@/features/dashboard/DashboardPanel";
+import type { KiroAccountSummary } from "@/features/kiro/types";
 import { LogsPanel } from "@/features/logs/LogsPanel";
 import { ProvidersPanel } from "@/features/providers/ProvidersPanel";
 import { m } from "@/paraglide/messages.js";
@@ -53,6 +55,14 @@ type AppViewProps = {
   showLocalKey: boolean;
   showUpstreamKeys: boolean;
   providerOptions: string[];
+  codexAccounts: CodexAccountSummary[];
+  codexAccountsLoading: boolean;
+  codexAccountsError: string;
+  onRefreshCodexAccounts: () => void;
+  kiroAccounts: KiroAccountSummary[];
+  kiroAccountsLoading: boolean;
+  kiroAccountsError: string;
+  onRefreshKiroAccounts: () => void;
   configPath: string;
   savedAt: string;
   autoStartEnabled: boolean;
@@ -258,6 +268,14 @@ function ConfigSectionBody({
             strategy={props.form.upstreamStrategy}
             showApiKeys={props.showUpstreamKeys}
             providerOptions={props.providerOptions}
+            codexAccounts={props.codexAccounts}
+            codexAccountsLoading={props.codexAccountsLoading}
+            codexAccountsError={props.codexAccountsError}
+            onRefreshCodexAccounts={props.onRefreshCodexAccounts}
+            kiroAccounts={props.kiroAccounts}
+            kiroAccountsLoading={props.kiroAccountsLoading}
+            kiroAccountsError={props.kiroAccountsError}
+            onRefreshKiroAccounts={props.onRefreshKiroAccounts}
             onToggleApiKeys={props.onToggleUpstreamKeys}
             onStrategyChange={props.onStrategyChange}
             onAdd={props.onAddUpstream}

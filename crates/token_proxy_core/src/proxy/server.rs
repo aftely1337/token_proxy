@@ -43,11 +43,20 @@ type ProxyStateHandle = Arc<RwLock<Arc<ProxyState>>>;
 mod bootstrap;
 pub(crate) use bootstrap::{build_router, build_upstream_cursors};
 
+#[derive(Clone)]
 struct DispatchPlan {
     provider: &'static str,
     outbound_path: Option<&'static str>,
     request_transform: FormatTransform,
     response_transform: FormatTransform,
+}
+
+#[derive(Clone)]
+struct ConcreteResponsesCandidate {
+    plan: DispatchPlan,
+    target_upstream_id: String,
+    selector_key: String,
+    priority: i32,
 }
 
 struct PreparedRequest {
@@ -560,6 +569,58 @@ fn resolve_responses_plan(config: &ProxyConfig) -> Result<DispatchPlan, String> 
     })
 }
 
+fn should_use_responses_priority_chain(config: &ProxyConfig, path: &str) -> bool {
+    detect_inbound_api_format(path) == Some(InboundApiFormat::OpenaiResponses)
+        && provider_rank_for_inbound(
+            config,
+            PROVIDER_RESPONSES,
+            Some(InboundApiFormat::OpenaiResponses),
+        )
+        .is_some()
+        && provider_rank_for_inbound(
+            config,
+            PROVIDER_CODEX,
+            Some(InboundApiFormat::OpenaiResponses),
+        )
+        .is_some()
+}
+
+fn build_responses_priority_candidates(
+    config: &ProxyConfig,
+    path: &str,
+) -> Vec<ConcreteResponsesCandidate> {
+    let mut candidates = Vec::new();
+    for provider in [PROVIDER_CODEX, PROVIDER_RESPONSES] {
+        let Some(plan) = build_retry_fallback_plan(path, provider) else {
+            continue;
+        };
+        let Some(provider_upstreams) = config.provider_upstreams(provider) else {
+            continue;
+        };
+        for group in &provider_upstreams.groups {
+            for upstream in &group.items {
+                if !upstream.supports_inbound(InboundApiFormat::OpenaiResponses) {
+                    continue;
+                }
+                candidates.push(ConcreteResponsesCandidate {
+                    plan: plan.clone(),
+                    target_upstream_id: upstream.id.clone(),
+                    selector_key: upstream.selector_key.clone(),
+                    priority: upstream.priority,
+                });
+            }
+        }
+    }
+
+    candidates.sort_by(|left, right| {
+        right
+            .priority
+            .cmp(&left.priority)
+            .then_with(|| left.target_upstream_id.cmp(&right.target_upstream_id))
+    });
+    candidates
+}
+
 #[cfg(test)]
 fn resolve_dispatch_plan(config: &ProxyConfig, path: &str) -> Result<DispatchPlan, String> {
     resolve_dispatch_plan_with_request(config, path, &HeaderMap::new(), None)
@@ -717,6 +778,29 @@ async fn forward_retry_fallback_request(
     request_start: Instant,
     plan: &DispatchPlan,
 ) -> Result<super::upstream::ForwardUpstreamResult, Response> {
+    forward_planned_request(
+        state,
+        method,
+        uri,
+        headers,
+        prepared,
+        request_start,
+        plan,
+        None,
+    )
+    .await
+}
+
+async fn forward_planned_request(
+    state: Arc<ProxyState>,
+    method: Method,
+    uri: &Uri,
+    headers: &HeaderMap,
+    prepared: &PreparedRequest,
+    request_start: Instant,
+    plan: &DispatchPlan,
+    target_upstream_id: Option<&str>,
+) -> Result<super::upstream::ForwardUpstreamResult, Response> {
     let outbound_path = resolve_outbound_path(&prepared.path, plan, &prepared.meta);
     let outbound_path_with_query = build_outbound_path_with_query(&outbound_path, uri);
     let outbound_body = build_outbound_body_or_respond(
@@ -741,10 +825,50 @@ async fn forward_retry_fallback_request(
         &prepared.meta,
         &prepared.request_auth,
         prepared.client_gemini_api_key.clone(),
+        target_upstream_id,
         plan.response_transform,
         prepared.request_detail.clone(),
     )
     .await)
+}
+
+async fn forward_responses_priority_chain(
+    state: Arc<ProxyState>,
+    method: Method,
+    uri: &Uri,
+    headers: &HeaderMap,
+    prepared: &PreparedRequest,
+    request_start: Instant,
+) -> Result<Response, Response> {
+    let candidates = build_responses_priority_candidates(&state.config, &prepared.path);
+    let mut last_response: Option<Response> = None;
+
+    for candidate in candidates {
+        if state
+            .upstream_selector
+            .is_cooling_down(candidate.plan.provider, candidate.selector_key.as_str())
+        {
+            continue;
+        }
+        let result = forward_planned_request(
+            state.clone(),
+            method.clone(),
+            uri,
+            headers,
+            prepared,
+            request_start,
+            &candidate.plan,
+            Some(candidate.target_upstream_id.as_str()),
+        )
+        .await?;
+        if !result.should_fallback {
+            return Ok(result.response);
+        }
+        last_response = Some(result.response);
+    }
+
+    Ok(last_response
+        .unwrap_or_else(|| http::error_response(StatusCode::BAD_GATEWAY, ERROR_NO_UPSTREAM)))
 }
 
 async fn capture_detail_from_body(
@@ -1283,6 +1407,20 @@ async fn proxy_request(
             Ok(prepared) => prepared,
             Err(response) => return response,
         };
+    if should_use_responses_priority_chain(&state.config, &prepared.path) {
+        return match forward_responses_priority_chain(
+            state,
+            method,
+            &uri,
+            &headers,
+            &prepared,
+            request_start,
+        )
+        .await
+        {
+            Ok(response) | Err(response) => response,
+        };
+    }
     let primary = forward_upstream_request(
         state.clone(),
         method.clone(),
@@ -1294,6 +1432,7 @@ async fn proxy_request(
         &prepared.meta,
         &prepared.request_auth,
         prepared.client_gemini_api_key.clone(),
+        None,
         prepared.plan.response_transform,
         prepared.request_detail.clone(),
     )

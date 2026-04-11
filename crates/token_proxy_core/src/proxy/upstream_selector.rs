@@ -65,6 +65,23 @@ impl UpstreamSelectorRuntime {
         cooldowns.remove(&CooldownKey::new(provider, upstream_key));
     }
 
+    pub(crate) fn is_cooling_down(&self, provider: &str, upstream_key: &str) -> bool {
+        let now = Instant::now();
+        let mut cooldowns = self
+            .cooldowns
+            .lock()
+            .expect("selector cooldown lock poisoned");
+        let key = CooldownKey::new(provider, upstream_key);
+        match cooldowns.get(&key).copied() {
+            Some(until) if until > now => true,
+            Some(_) => {
+                cooldowns.remove(&key);
+                false
+            }
+            None => false,
+        }
+    }
+
     fn prioritize_ready_upstreams(
         &self,
         provider: &str,

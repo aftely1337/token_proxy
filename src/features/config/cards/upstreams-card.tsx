@@ -20,6 +20,7 @@ import { ColumnsDialog } from "@/features/config/cards/upstreams/columns-dialog"
 import { DeleteUpstreamDialog } from "@/features/config/cards/upstreams/delete-dialog";
 import { UpstreamEditorDialog } from "@/features/config/cards/upstreams/editor-dialog";
 import { UpstreamsTable, UpstreamsToolbar } from "@/features/config/cards/upstreams/table";
+import type { CodexAccountSummary } from "@/features/codex/types";
 import type {
   ColumnVisibility,
   DeleteDialogState,
@@ -27,6 +28,7 @@ import type {
 } from "@/features/config/cards/upstreams/types";
 import { createEmptyUpstream } from "@/features/config/form";
 import type { ConfigForm, UpstreamForm } from "@/features/config/types";
+import type { KiroAccountSummary } from "@/features/kiro/types";
 import { m } from "@/paraglide/messages.js";
 
 type UpstreamsCardProps = {
@@ -35,6 +37,14 @@ type UpstreamsCardProps = {
   strategy: ConfigForm["upstreamStrategy"];
   showApiKeys: boolean;
   providerOptions: string[];
+  codexAccounts: CodexAccountSummary[];
+  codexAccountsLoading: boolean;
+  codexAccountsError: string;
+  onRefreshCodexAccounts: () => void;
+  kiroAccounts: KiroAccountSummary[];
+  kiroAccountsLoading: boolean;
+  kiroAccountsError: string;
+  onRefreshKiroAccounts: () => void;
   onToggleApiKeys: () => void;
   onStrategyChange: (value: ConfigForm["upstreamStrategy"]) => void;
   onAdd: (upstream: UpstreamForm) => void;
@@ -48,6 +58,14 @@ export function UpstreamsCard({
   strategy,
   showApiKeys,
   providerOptions,
+  codexAccounts,
+  codexAccountsLoading,
+  codexAccountsError,
+  onRefreshCodexAccounts,
+  kiroAccounts,
+  kiroAccountsLoading,
+  kiroAccountsError,
+  onRefreshKiroAccounts,
   onToggleApiKeys,
   onStrategyChange,
   onAdd,
@@ -101,6 +119,8 @@ export function UpstreamsCard({
           let rewriteDeveloperRoleToSystem = prev.draft.rewriteDeveloperRoleToSystem;
           let baseUrl = patch.baseUrl ?? prev.draft.baseUrl;
           let proxyUrl = patch.proxyUrl ?? prev.draft.proxyUrl;
+          let kiroAccountId = patch.kiroAccountId ?? prev.draft.kiroAccountId;
+          let codexAccountId = patch.codexAccountId ?? prev.draft.codexAccountId;
           let convertFromMap = patch.convertFromMap ?? prev.draft.convertFromMap;
 
           if (!nextProviders.includes("openai-response")) {
@@ -110,6 +130,12 @@ export function UpstreamsCard({
           }
           if (!nextProviders.some((provider) => provider === "openai" || provider === "openai-response")) {
             rewriteDeveloperRoleToSystem = false;
+          }
+          if (!nextProviders.includes("kiro")) {
+            kiroAccountId = "";
+          }
+          if (!nextProviders.includes("codex")) {
+            codexAccountId = "";
           }
           if (
             nextProviders.length === 1 &&
@@ -150,6 +176,8 @@ export function UpstreamsCard({
               providers: nextProviders,
               id,
               baseUrl,
+              kiroAccountId,
+              codexAccountId,
               filterPromptCacheRetention,
               filterSafetyIdentifier,
               useChatCompletionsForResponses,
@@ -264,6 +292,14 @@ export function UpstreamsCard({
         providerOptions={mergedProviderOptions}
         appProxyUrl={appProxyUrl}
         showApiKeys={showApiKeys}
+        codexAccounts={codexAccounts}
+        codexAccountsLoading={codexAccountsLoading}
+        codexAccountsError={codexAccountsError}
+        onRefreshCodexAccounts={onRefreshCodexAccounts}
+        kiroAccounts={kiroAccounts}
+        kiroAccountsLoading={kiroAccountsLoading}
+        kiroAccountsError={kiroAccountsError}
+        onRefreshKiroAccounts={onRefreshKiroAccounts}
         onToggleApiKeys={onToggleApiKeys}
         onOpenChange={(open) => !open && setEditor({ open: false })}
         onChangeDraft={updateDraft}

@@ -14,7 +14,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { getUpstreamLabel } from "@/features/config/cards/upstreams/constants";
 import { UpstreamEditorFields } from "@/features/config/cards/upstreams/editor-dialog-form";
 import type { UpstreamEditorState } from "@/features/config/cards/upstreams/types";
+import type { CodexAccountSummary } from "@/features/codex/types";
 import type { UpstreamForm } from "@/features/config/types";
+import type { KiroAccountSummary } from "@/features/kiro/types";
 import { m } from "@/paraglide/messages.js";
 
 type UpstreamEditorDialogProps = {
@@ -22,6 +24,14 @@ type UpstreamEditorDialogProps = {
   providerOptions: readonly string[];
   appProxyUrl: string;
   showApiKeys: boolean;
+  codexAccounts: CodexAccountSummary[];
+  codexAccountsLoading: boolean;
+  codexAccountsError: string;
+  onRefreshCodexAccounts: () => void;
+  kiroAccounts: KiroAccountSummary[];
+  kiroAccountsLoading: boolean;
+  kiroAccountsError: string;
+  onRefreshKiroAccounts: () => void;
   onToggleApiKeys: () => void;
   onOpenChange: (open: boolean) => void;
   onChangeDraft: (patch: Partial<UpstreamForm>) => void;
@@ -33,6 +43,14 @@ export function UpstreamEditorDialog({
   providerOptions,
   appProxyUrl,
   showApiKeys,
+  codexAccounts,
+  codexAccountsLoading,
+  codexAccountsError,
+  onRefreshCodexAccounts,
+  kiroAccounts,
+  kiroAccountsLoading,
+  kiroAccountsError,
+  onRefreshKiroAccounts,
   onToggleApiKeys,
   onOpenChange,
   onChangeDraft,
@@ -73,6 +91,14 @@ export function UpstreamEditorDialog({
               providerOptions={providerOptions}
               appProxyUrl={appProxyUrl}
               showApiKeys={showApiKeys}
+              codexAccounts={codexAccounts}
+              codexAccountsLoading={codexAccountsLoading}
+              codexAccountsError={codexAccountsError}
+              onRefreshCodexAccounts={onRefreshCodexAccounts}
+              kiroAccounts={kiroAccounts}
+              kiroAccountsLoading={kiroAccountsLoading}
+              kiroAccountsError={kiroAccountsError}
+              onRefreshKiroAccounts={onRefreshKiroAccounts}
               onToggleApiKeys={onToggleApiKeys}
               onChangeDraft={onChangeDraft}
             />

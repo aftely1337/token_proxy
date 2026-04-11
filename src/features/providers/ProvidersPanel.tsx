@@ -102,7 +102,6 @@ type ProvidersSectionsProps = {
   onLogout: (row: ProviderAccountTableRow) => Promise<void>;
   onBatchDelete: (rows: ProviderAccountTableRow[]) => Promise<void>;
   onSaveProxyUrl: (row: ProviderAccountTableRow, proxyUrl: string) => Promise<void>;
-  onSavePriority: (row: ProviderAccountTableRow, priority: number) => Promise<void>;
   onToggleStatus: (row: ProviderAccountTableRow, status: "active" | "disabled") => Promise<void>;
   onToggleAutoRefresh: (row: ProviderAccountTableRow, enabled: boolean) => Promise<void>;
 };
@@ -886,7 +885,6 @@ function ProvidersSections({
   onLogout,
   onBatchDelete,
   onSaveProxyUrl,
-  onSavePriority,
   onToggleStatus,
   onToggleAutoRefresh,
 }: ProvidersSectionsProps) {
@@ -905,7 +903,6 @@ function ProvidersSections({
       onLogout={onLogout}
       onBatchDelete={onBatchDelete}
       onSaveProxyUrl={onSaveProxyUrl}
-      onSavePriority={onSavePriority}
       onToggleStatus={onToggleStatus}
       onToggleAutoRefresh={onToggleAutoRefresh}
     />
@@ -1184,24 +1181,6 @@ function useProvidersPanelState() {
     },
     [kiroAccounts, codexAccounts, providerAccounts]
   );
-  const handleSavePriority = useCallback(
-    async (row: ProviderAccountTableRow, priority: number) => {
-      try {
-        if (row.provider === "kiro") {
-          await kiroAccounts.setPriority(row.accountId, priority);
-          await kiroAccounts.refresh();
-        } else {
-          await codexAccounts.setPriority(row.accountId, priority);
-          await codexAccounts.refresh();
-        }
-        await providerAccounts.refresh();
-      } catch (error) {
-        toast.error(parseError(error));
-      }
-    },
-    [kiroAccounts, codexAccounts, providerAccounts]
-  );
-
   const handleBatchDelete = useCallback(
     async (rowsToDelete: ProviderAccountTableRow[]) => {
       if (rowsToDelete.length === 0) {
@@ -1241,7 +1220,6 @@ function useProvidersPanelState() {
     onLogout: handleRowLogout,
     onBatchDelete: handleBatchDelete,
     onSaveProxyUrl: handleSaveProxyUrl,
-    onSavePriority: handleSavePriority,
     onToggleStatus: handleAccountStatusToggle,
     onToggleAutoRefresh: handleCodexAutoRefreshToggle,
   };
@@ -1267,7 +1245,6 @@ export function ProvidersPanel() {
         onLogout={state.onLogout}
         onBatchDelete={state.onBatchDelete}
         onSaveProxyUrl={state.onSaveProxyUrl}
-        onSavePriority={state.onSavePriority}
         onToggleStatus={state.onToggleStatus}
         onToggleAutoRefresh={state.onToggleAutoRefresh}
       />
