@@ -491,6 +491,58 @@ describe("providers/ProvidersPanel", () => {
     expect(within(getAccountsTable()).getByText("Codex Cached Plan")).toBeInTheDocument();
   });
 
+  it("shows codex session and weekly quota summaries directly in the table", async () => {
+    providerMocks.listProviderAccountsPage.mockResolvedValueOnce({
+      items: [
+        {
+          provider_kind: "codex" as const,
+          account_id: "codex-plus",
+          email: "plus@example.com",
+          expires_at: "2026-04-01T00:00:00Z",
+          status: "active" as const,
+          auth_method: null,
+          provider_name: null,
+          auto_refresh_enabled: true,
+          priority: 0,
+          proxy_url: "",
+          quota: {
+            plan_type: "ChatGPT Plus",
+            error: null,
+            checked_at: "2026-04-01T00:00:00Z",
+            items: [
+              {
+                name: "codex-session",
+                percentage: 0,
+                used: 0,
+                limit: 100,
+                reset_at: "2026-04-12T00:00:00Z",
+                is_trial: false,
+              },
+              {
+                name: "codex-weekly",
+                percentage: 50,
+                used: 50,
+                limit: 100,
+                reset_at: "2026-04-18T00:00:00Z",
+                is_trial: false,
+              },
+            ],
+          },
+        } as ProviderAccountPageItem,
+      ],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
+
+    render(<ProvidersPanel />);
+
+    expect(await screen.findByText("plus@example.com")).toBeInTheDocument();
+    expect(within(getAccountsTable()).getByText(new RegExp(m.codex_quota_session(), "i"))).toBeInTheDocument();
+    expect(within(getAccountsTable()).getByText(new RegExp(m.codex_quota_weekly(), "i"))).toBeInTheDocument();
+    expect(within(getAccountsTable()).queryByText(/2 items/i)).not.toBeInTheDocument();
+  });
+
   it("keeps API order so higher priority accounts render first across providers", async () => {
     providerMocks.listProviderAccountsPage.mockResolvedValueOnce({
       items: [

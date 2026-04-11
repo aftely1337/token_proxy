@@ -58,7 +58,6 @@ describe("providers/providers-accounts-table", () => {
         onLogout={vi.fn(async () => undefined)}
         onBatchDelete={vi.fn(async () => undefined)}
         onSaveProxyUrl={vi.fn(async () => undefined)}
-        onSavePriority={vi.fn(async () => undefined)}
         onRefreshQuota={vi.fn(async () => undefined)}
         onToggleStatus={vi.fn(async () => undefined)}
         onToggleAutoRefresh={vi.fn(async () => undefined)}
@@ -66,7 +65,7 @@ describe("providers/providers-accounts-table", () => {
     );
 
     expect(screen.getByRole("columnheader", { name: "ID" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: m.field_priority() })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: m.field_priority() })).not.toBeInTheDocument();
     expect(
       screen.queryByRole("columnheader", { name: m.providers_table_account_id() })
     ).not.toBeInTheDocument();
@@ -91,7 +90,6 @@ describe("providers/providers-accounts-table", () => {
         onLogout={vi.fn(async () => undefined)}
         onBatchDelete={vi.fn(async () => undefined)}
         onSaveProxyUrl={vi.fn(async () => undefined)}
-        onSavePriority={vi.fn(async () => undefined)}
         onRefreshQuota={vi.fn(async () => undefined)}
         onToggleStatus={vi.fn(async () => undefined)}
         onToggleAutoRefresh={vi.fn(async () => undefined)}
@@ -128,7 +126,6 @@ describe("providers/providers-accounts-table", () => {
         onLogout={vi.fn(async () => undefined)}
         onBatchDelete={vi.fn(async () => undefined)}
         onSaveProxyUrl={vi.fn(async () => undefined)}
-        onSavePriority={vi.fn(async () => undefined)}
         onRefreshQuota={vi.fn(async () => undefined)}
         onToggleStatus={vi.fn(async () => undefined)}
         onToggleAutoRefresh={vi.fn(async () => undefined)}
@@ -170,8 +167,7 @@ describe("providers/providers-accounts-table", () => {
           onLogout={onLogout}
           onBatchDelete={onBatchDelete}
           onSaveProxyUrl={onSaveProxyUrl}
-          onSavePriority={vi.fn(async () => undefined)}
-          onRefreshQuota={onRefreshQuota}
+            onRefreshQuota={onRefreshQuota}
           onToggleStatus={onToggleStatus}
           onToggleAutoRefresh={vi.fn(async () => undefined)}
         />
@@ -223,8 +219,7 @@ describe("providers/providers-accounts-table", () => {
           onLogout={onLogout}
           onBatchDelete={onBatchDelete}
           onSaveProxyUrl={onSaveProxyUrl}
-          onSavePriority={vi.fn(async () => undefined)}
-          onRefreshQuota={onRefreshQuota}
+            onRefreshQuota={onRefreshQuota}
           onToggleStatus={onToggleStatus}
           onToggleAutoRefresh={vi.fn(async () => undefined)}
         />
@@ -267,7 +262,6 @@ describe("providers/providers-accounts-table", () => {
         onLogout={onLogout}
         onBatchDelete={onBatchDelete}
         onSaveProxyUrl={onSaveProxyUrl}
-        onSavePriority={vi.fn(async () => undefined)}
         onRefreshQuota={onRefreshQuota}
         onToggleStatus={onToggleStatus}
         onToggleAutoRefresh={vi.fn(async () => undefined)}
@@ -314,7 +308,6 @@ describe("providers/providers-accounts-table", () => {
         onLogout={onLogout}
         onBatchDelete={onBatchDelete}
         onSaveProxyUrl={onSaveProxyUrl}
-        onSavePriority={vi.fn(async () => undefined)}
         onRefreshQuota={onRefreshQuota}
         onToggleStatus={onToggleStatus}
         onToggleAutoRefresh={vi.fn(async () => undefined)}
@@ -375,7 +368,6 @@ describe("providers/providers-accounts-table", () => {
         onLogout={onLogout}
         onBatchDelete={onBatchDelete}
         onSaveProxyUrl={onSaveProxyUrl}
-        onSavePriority={vi.fn(async () => undefined)}
         onRefreshQuota={onRefreshQuota}
         onToggleStatus={onToggleStatus}
         onToggleAutoRefresh={vi.fn(async () => undefined)}
@@ -415,7 +407,6 @@ describe("providers/providers-accounts-table", () => {
         onLogout={onLogout}
         onBatchDelete={onBatchDelete}
         onSaveProxyUrl={onSaveProxyUrl}
-        onSavePriority={vi.fn(async () => undefined)}
         onRefreshQuota={onRefreshQuota}
         onToggleStatus={onToggleStatus}
         onToggleAutoRefresh={vi.fn(async () => undefined)}
@@ -452,7 +443,6 @@ describe("providers/providers-accounts-table", () => {
         onLogout={onLogout}
         onBatchDelete={onBatchDelete}
         onSaveProxyUrl={onSaveProxyUrl}
-        onSavePriority={vi.fn(async () => undefined)}
         onRefreshQuota={onRefreshQuota}
         onToggleStatus={onToggleStatus}
         onToggleAutoRefresh={vi.fn(async () => undefined)}

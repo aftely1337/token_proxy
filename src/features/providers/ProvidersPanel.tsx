@@ -674,6 +674,21 @@ function summarizeQuota(summary: string, count: number) {
   return summary;
 }
 
+function summarizeCodexQuotaItems(items: ProviderAccountQuotaDetailItem[]) {
+  if (!items.length) {
+    return PLACEHOLDER;
+  }
+
+  const visibleItems = items.slice(0, 2).map((item) => `${item.name} ? ${item.summary}`);
+  if (items.length <= 2) {
+    return visibleItems.join(" / ");
+  }
+
+  return `${visibleItems.join(" / ")} / ${m.providers_table_quota_items({
+    count: items.length - 2,
+  })}`;
+}
+
 function joinSummaryParts(parts: Array<string>) {
   return parts.filter(Boolean).join(" · ");
 }
@@ -763,10 +778,7 @@ function buildCodexQuotaDetails(quota: ProviderAccountPageItem["quota"] | null) 
   });
   return {
     planType: quota.plan_type ?? PLACEHOLDER,
-    quotaSummary: summarizeQuota(
-      `${quotaItems[0]?.name} · ${quotaItems[0]?.summary ?? PLACEHOLDER}`,
-      quotaItems.length
-    ),
+    quotaSummary: summarizeCodexQuotaItems(quotaItems),
     quotaError: "",
     quotaItems,
   };

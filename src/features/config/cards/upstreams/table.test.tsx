@@ -24,6 +24,8 @@ function buildUpstream(): UpstreamForm {
     rewriteDeveloperRoleToSystem: false,
     preferredEndpoint: "",
     proxyUrl: "",
+    kiroAccountId: "",
+    codexAccountId: "",
     priority: "10",
     enabled: true,
     modelMappings: [],

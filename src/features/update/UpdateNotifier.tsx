@@ -18,10 +18,6 @@ import { m } from "@/paraglide/messages.js";
 
 type ToastId = string | number;
 
-// React StrictMode in dev will mount -> unmount -> mount components to surface side effects.
-// Use a module-level guard to ensure we only auto-check once per app launch.
-let didRunAutoCheck = false;
-
 function buildDownloadProgressLabel(downloaded: number, total: number) {
   if (!total && !downloaded) {
     return "";
@@ -35,7 +31,7 @@ function buildDownloadProgressLabel(downloaded: number, total: number) {
 export function UpdateNotifier() {
   const navigate = useNavigate();
   const { state, actions } = useUpdater();
-  const { checkForUpdate, downloadAndInstall, relaunchApp } = actions;
+  const { downloadAndInstall, relaunchApp } = actions;
   const [dismissedRestartPromptKey, setDismissedRestartPromptKey] = useState<string | null>(null);
   const availableToastVersionRef = useRef<string | null>(null);
   const availableToastIdRef = useRef<ToastId | null>(null);
@@ -56,16 +52,6 @@ export function UpdateNotifier() {
         : "",
     [state.downloadState.downloaded, state.downloadState.total, state.status]
   );
-
-  useEffect(() => {
-    if (didRunAutoCheck || !state.appProxyUrlReady) {
-      return;
-    }
-
-    // Wait for config to load so app_proxy_url can be applied.
-    didRunAutoCheck = true;
-    void checkForUpdate({ source: "auto" });
-  }, [checkForUpdate, state.appProxyUrlReady]);
 
   useEffect(() => {
     const previousStatus = lastStatusRef.current;
