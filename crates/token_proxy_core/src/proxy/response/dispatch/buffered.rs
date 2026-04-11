@@ -1,6 +1,6 @@
 use axum::{
     body::{Body, Bytes},
-    http::{HeaderMap, StatusCode},
+    http::{header::CONTENT_TYPE, HeaderMap, HeaderValue, StatusCode},
     response::Response,
 };
 use std::sync::Arc;
@@ -36,6 +36,7 @@ pub(super) async fn build_buffered_response(
     estimated_input_tokens: Option<u64>,
     upstream_no_data_timeout: Duration,
 ) -> Response {
+    let mut headers = headers;
     let mut context = context;
     let response_headers = upstream_res.headers().clone();
     let bytes =
@@ -66,6 +67,9 @@ pub(super) async fn build_buffered_response(
         ) {
             Ok(converted) => {
                 usage = converted.usage;
+                if response_transform != FormatTransform::None {
+                    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+                }
                 converted.output
             }
             Err(response) => return response,
