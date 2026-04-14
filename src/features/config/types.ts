@@ -34,6 +34,15 @@ export const TRAY_TOKEN_RATE_FORMATS = [
 export type TrayTokenRateFormat = (typeof TRAY_TOKEN_RATE_FORMATS)[number]["value"];
 
 export type KiroPreferredEndpoint = "ide" | "cli";
+export type RetryableFailureCooldownMode = "time_window" | "clear_on_later_success";
+
+export const RETRYABLE_FAILURE_COOLDOWN_MODES = [
+  { value: "time_window", label: () => m.proxy_core_retryable_failure_cooldown_mode_time_window() },
+  {
+    value: "clear_on_later_success",
+    label: () => m.proxy_core_retryable_failure_cooldown_mode_clear_on_later_success(),
+  },
+] as const;
 
 export type LogLevel = "silent" | "error" | "warn" | "info" | "debug" | "trace";
 
@@ -134,6 +143,7 @@ export type ProxyConfigFileBase = {
   kiro_preferred_endpoint?: KiroPreferredEndpoint | null;
   log_level?: LogLevel;
   retryable_failure_cooldown_secs?: number;
+  retryable_failure_cooldown_mode?: RetryableFailureCooldownMode;
   upstream_no_data_timeout_secs?: number;
   tray_token_rate: TrayTokenRateConfig;
   upstream_strategy: UpstreamStrategy;
@@ -232,6 +242,7 @@ export type ConfigForm = {
   kiroPreferredEndpoint: "" | KiroPreferredEndpoint;
   logLevel: LogLevel;
   retryableFailureCooldownSecs: string;
+  retryableFailureCooldownMode: RetryableFailureCooldownMode;
   upstreamNoDataTimeoutSecs: string;
   trayTokenRate: TrayTokenRateConfig;
   upstreamStrategy: {

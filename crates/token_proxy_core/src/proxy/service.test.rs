@@ -21,6 +21,8 @@ fn config_with_addr_and_body_limit(
         log_level: LogLevel::Silent,
         max_request_body_bytes,
         retryable_failure_cooldown: Duration::from_secs(15),
+        retryable_failure_cooldown_mode:
+            crate::proxy::config::RetryableFailureCooldownMode::TimeWindow,
         upstream_no_data_timeout: Duration::from_secs(120),
         upstream_strategy: crate::proxy::config::UpstreamStrategyRuntime::default(),
         payload_rules: PayloadRulesConfig::default(),

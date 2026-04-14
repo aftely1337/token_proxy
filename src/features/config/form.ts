@@ -14,6 +14,7 @@ import {
   type PayloadValueRuleForm,
   type ProxyConfigFile,
   type ProxyConfigFileBase,
+  type RetryableFailureCooldownMode,
   type TrayTokenRateConfig,
   type UpstreamDispatchStrategy,
   type UpstreamForm,
@@ -51,6 +52,10 @@ let payloadParamCounter = 0;
 const TRAY_TOKEN_RATE_FORMAT_VALUES: ReadonlySet<string> = new Set(
   TRAY_TOKEN_RATE_FORMATS.map((format) => format.value)
 );
+const RETRYABLE_FAILURE_COOLDOWN_MODE_VALUES: ReadonlySet<string> = new Set([
+  "time_window",
+  "clear_on_later_success",
+]);
 
 function isKiroPreferredEndpoint(value: string): value is KiroPreferredEndpoint {
   return value === "ide" || value === "cli";
@@ -98,6 +103,7 @@ const KNOWN_CONFIG_KEYS: ReadonlySet<string> = new Set([
   "kiro_preferred_endpoint",
   "log_level",
   "retryable_failure_cooldown_secs",
+  "retryable_failure_cooldown_mode",
   "upstream_no_data_timeout_secs",
   "tray_token_rate",
   "upstream_strategy",
@@ -114,6 +120,7 @@ export const EMPTY_FORM: ConfigForm = {
   kiroPreferredEndpoint: "ide",
   logLevel: "silent",
   retryableFailureCooldownSecs: "15",
+  retryableFailureCooldownMode: "time_window",
   upstreamNoDataTimeoutSecs: String(DEFAULT_UPSTREAM_NO_DATA_TIMEOUT_SECS),
   trayTokenRate: { ...DEFAULT_TRAY_TOKEN_RATE },
   upstreamStrategy: {
@@ -234,6 +241,9 @@ export function toForm(config: ProxyConfigFile): ConfigForm {
     kiroPreferredEndpoint: config.kiro_preferred_endpoint ?? "ide",
     logLevel: config.log_level ?? "silent",
     retryableFailureCooldownSecs: String(config.retryable_failure_cooldown_secs ?? 15),
+    retryableFailureCooldownMode: normalizeRetryableFailureCooldownMode(
+      config.retryable_failure_cooldown_mode,
+    ),
     upstreamNoDataTimeoutSecs: String(
       config.upstream_no_data_timeout_secs ?? DEFAULT_UPSTREAM_NO_DATA_TIMEOUT_SECS,
     ),
@@ -278,6 +288,9 @@ export function toPayload(form: ConfigForm): ProxyConfigFile {
     log_level: form.logLevel,
     retryable_failure_cooldown_secs: parseRetryableFailureCooldownSecs(
       form.retryableFailureCooldownSecs,
+    ),
+    retryable_failure_cooldown_mode: normalizeRetryableFailureCooldownMode(
+      form.retryableFailureCooldownMode,
     ),
     upstream_no_data_timeout_secs: parseUpstreamNoDataTimeoutSecs(
       form.upstreamNoDataTimeoutSecs,
@@ -360,6 +373,12 @@ export function validate(form: ConfigForm) {
     return {
       valid: false,
       message: m.error_retryable_failure_cooldown_secs_integer(),
+    };
+  }
+  if (!isRetryableFailureCooldownMode(form.retryableFailureCooldownMode)) {
+    return {
+      valid: false,
+      message: m.error_retryable_failure_cooldown_mode_invalid(),
     };
   }
   if (!isValidUpstreamNoDataTimeoutSecs(form.upstreamNoDataTimeoutSecs)) {
@@ -940,6 +959,21 @@ function isValidRetryableFailureCooldownSecs(value: string) {
     return false;
   }
   return NON_NEGATIVE_INTEGER_PATTERN.test(trimmed);
+}
+
+function isRetryableFailureCooldownMode(
+  value: string | null | undefined
+): value is RetryableFailureCooldownMode {
+  return !!value && RETRYABLE_FAILURE_COOLDOWN_MODE_VALUES.has(value);
+}
+
+function normalizeRetryableFailureCooldownMode(
+  value: string | null | undefined
+): RetryableFailureCooldownMode {
+  if (isRetryableFailureCooldownMode(value)) {
+    return value;
+  }
+  return "time_window";
 }
 
 function parseRetryableFailureCooldownSecs(value: string) {

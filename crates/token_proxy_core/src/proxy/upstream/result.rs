@@ -77,6 +77,7 @@ pub(super) async fn handle_upstream_result(
                 response: Some(response),
                 is_timeout: false,
                 should_cooldown: should_cooldown_retryable_status(status),
+                cooled_account_id: account_id_value.clone(),
             }
         }
         Ok(res) => {
@@ -115,6 +116,7 @@ pub(super) async fn handle_upstream_result(
                     response: Some(response),
                     is_timeout: false,
                     should_cooldown: retryable.should_cooldown,
+                    cooled_account_id: account_id_value.clone(),
                 };
             }
             update_account_cooldown_from_status(
@@ -156,6 +158,7 @@ pub(super) async fn handle_upstream_result(
                 response: None,
                 is_timeout: err.is_timeout(),
                 should_cooldown: true,
+                cooled_account_id: account_id_value.clone(),
             }
         }
         Err(err) => {

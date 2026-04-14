@@ -30,7 +30,10 @@ use utils::resolve_group_start;
 use crate::proxy::redact::redact_query_param_value;
 
 use super::{
-    config::{InboundApiFormat, ProviderUpstreams, UpstreamDispatchRuntime, UpstreamRuntime},
+    config::{
+        InboundApiFormat, ProviderUpstreams, RetryableFailureCooldownMode,
+        UpstreamDispatchRuntime, UpstreamRuntime,
+    },
     gemini, http,
     http::RequestAuth,
     inbound::detect_inbound_api_format,
@@ -135,6 +138,8 @@ fn merge_model_catalog_ids(target: &mut Vec<String>, extra: Vec<String>) {
 pub(super) struct ForwardUpstreamResult {
     pub(super) response: Response,
     pub(super) should_fallback: bool,
+    pub(super) cooled_upstream_keys: Vec<String>,
+    pub(super) cooled_account_ids: Vec<String>,
 }
 
 pub(super) async fn forward_upstream_request(
@@ -166,6 +171,8 @@ pub(super) async fn forward_upstream_request(
                 response,
                 // Treat missing upstream config as retryable for higher-level fallback (e.g. cross-provider).
                 should_fallback: true,
+                cooled_upstream_keys: Vec::new(),
+                cooled_account_ids: Vec::new(),
             };
         }
     };
@@ -188,15 +195,29 @@ pub(super) async fn forward_upstream_request(
     )
     .await;
     if let Some(response) = summary.response {
+        if state.config.retryable_failure_cooldown_mode
+            == RetryableFailureCooldownMode::ClearOnLaterSuccess
+        {
+            clear_tracked_cooldowns(
+                &state,
+                provider,
+                &summary.cooled_upstream_keys,
+                &summary.cooled_account_ids,
+            );
+        }
         return ForwardUpstreamResult {
             response,
             should_fallback: false,
+            cooled_upstream_keys: Vec::new(),
+            cooled_account_ids: Vec::new(),
         };
     }
     let should_fallback = summary.last_retry_response.is_some()
         || summary.last_timeout_error.is_some()
         || summary.last_retry_error.is_some()
         || summary.attempted == 0;
+    let cooled_upstream_keys = summary.cooled_upstream_keys.clone();
+    let cooled_account_ids = summary.cooled_account_ids.clone();
     let response = finalize_forward_response(
         &state,
         provider,
@@ -208,6 +229,8 @@ pub(super) async fn forward_upstream_request(
     ForwardUpstreamResult {
         response,
         should_fallback,
+        cooled_upstream_keys,
+        cooled_account_ids,
     }
 }
 
@@ -218,6 +241,8 @@ struct GroupAttemptResult {
     last_timeout_error: Option<String>,
     last_retry_error: Option<String>,
     last_retry_response: Option<Response>,
+    cooled_upstream_keys: Vec<String>,
+    cooled_account_ids: Vec<String>,
 }
 
 impl GroupAttemptResult {
@@ -229,6 +254,8 @@ impl GroupAttemptResult {
             last_timeout_error: None,
             last_retry_error: None,
             last_retry_response: None,
+            cooled_upstream_keys: Vec::new(),
+            cooled_account_ids: Vec::new(),
         }
     }
 }
@@ -240,6 +267,8 @@ struct ForwardAttemptState {
     last_timeout_error: Option<String>,
     last_retry_error: Option<String>,
     last_retry_response: Option<Response>,
+    cooled_upstream_keys: Vec<String>,
+    cooled_account_ids: Vec<String>,
 }
 
 impl ForwardAttemptState {
@@ -251,6 +280,8 @@ impl ForwardAttemptState {
             last_timeout_error: None,
             last_retry_error: None,
             last_retry_response: None,
+            cooled_upstream_keys: Vec::new(),
+            cooled_account_ids: Vec::new(),
         }
     }
 }
@@ -262,6 +293,7 @@ enum AttemptOutcome {
         response: Option<Response>,
         is_timeout: bool,
         should_cooldown: bool,
+        cooled_account_id: Option<String>,
     },
     Fatal(Response),
     SkippedAuth,
@@ -278,6 +310,7 @@ fn apply_attempt_outcome(result: &mut GroupAttemptResult, outcome: AttemptOutcom
             response,
             is_timeout,
             should_cooldown: _,
+            cooled_account_id,
         } => {
             if is_timeout {
                 result.last_timeout_error = Some(message.clone());
@@ -286,6 +319,9 @@ fn apply_attempt_outcome(result: &mut GroupAttemptResult, outcome: AttemptOutcom
             }
             if response.is_some() {
                 result.last_retry_response = response;
+            }
+            if let Some(account_id) = cooled_account_id {
+                push_unique(&mut result.cooled_account_ids, account_id);
             }
             false
         }
@@ -299,6 +335,8 @@ fn apply_attempt_outcome(result: &mut GroupAttemptResult, outcome: AttemptOutcom
 fn merge_group_result(state: &mut ForwardAttemptState, result: GroupAttemptResult) -> bool {
     state.attempted += result.attempted;
     state.missing_auth |= result.missing_auth;
+    extend_unique(&mut state.cooled_upstream_keys, result.cooled_upstream_keys);
+    extend_unique(&mut state.cooled_account_ids, result.cooled_account_ids);
     if let Some(response) = result.response {
         state.response = Some(response);
         return true;
@@ -597,6 +635,10 @@ fn apply_group_attempt_outcome(
             state
                 .upstream_selector
                 .mark_retryable_failure(provider, upstream.selector_key.as_str());
+            push_unique(
+                &mut result.cooled_upstream_keys,
+                upstream.selector_key.clone(),
+            );
         }
         _ => {}
     }
@@ -604,6 +646,36 @@ fn apply_group_attempt_outcome(
         result.attempted += 1;
     }
     apply_attempt_outcome(result, outcome)
+}
+
+fn push_unique(values: &mut Vec<String>, next: String) {
+    if !values.iter().any(|value| value == &next) {
+        values.push(next);
+    }
+}
+
+fn extend_unique(values: &mut Vec<String>, next: Vec<String>) {
+    for item in next {
+        push_unique(values, item);
+    }
+}
+
+pub(super) fn clear_tracked_cooldowns(
+    state: &ProxyState,
+    provider: &str,
+    cooled_upstream_keys: &[String],
+    cooled_account_ids: &[String],
+) {
+    for upstream_key in cooled_upstream_keys {
+        state
+            .upstream_selector
+            .clear_cooldown(provider, upstream_key.as_str());
+    }
+    for account_id in cooled_account_ids {
+        state
+            .account_selector
+            .clear_cooldown(provider, account_id.as_str());
+    }
 }
 
 async fn dispatch_group_upstreams(
@@ -1018,6 +1090,7 @@ async fn resolve_codex_upstream(
                 response: None,
                 is_timeout: false,
                 should_cooldown: false,
+                cooled_account_id: None,
             });
         }
     }
@@ -1082,6 +1155,7 @@ fn codex_account_resolution_outcome(has_pinned_account: bool, err: String) -> At
         response: Some(response),
         is_timeout: false,
         should_cooldown: false,
+        cooled_account_id: None,
     }
 }
 

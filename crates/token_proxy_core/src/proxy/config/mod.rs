@@ -14,9 +14,10 @@ const MIN_UPSTREAM_NO_DATA_TIMEOUT_SECS: u64 = 3;
 pub use types::{
     ConfigResponse, HeaderOverride, InboundApiFormat, KiroPreferredEndpoint, PayloadFilterRuleSet,
     PayloadParamRule, PayloadRulesConfig, PayloadValueRuleSet, PayloadValueType, ProviderUpstreams,
-    ProxyConfig, ProxyConfigFile, TrayTokenRateConfig, TrayTokenRateFormat, UpstreamConfig,
-    UpstreamDispatchRuntime, UpstreamDispatchStrategy, UpstreamGroup, UpstreamOrderStrategy,
-    UpstreamOverrides, UpstreamRuntime, UpstreamStrategy, UpstreamStrategyRuntime,
+    ProxyConfig, ProxyConfigFile, RetryableFailureCooldownMode, TrayTokenRateConfig,
+    TrayTokenRateFormat, UpstreamConfig, UpstreamDispatchRuntime, UpstreamDispatchStrategy,
+    UpstreamGroup, UpstreamOrderStrategy, UpstreamOverrides, UpstreamRuntime, UpstreamStrategy,
+    UpstreamStrategyRuntime,
 };
 
 pub async fn read_config(paths: &TokenProxyPaths) -> Result<ConfigResponse, String> {
@@ -77,6 +78,7 @@ fn build_runtime_config(config: ProxyConfigFile) -> Result<ProxyConfig, String> 
         retryable_failure_cooldown: resolve_retryable_failure_cooldown(
             config.retryable_failure_cooldown_secs,
         )?,
+        retryable_failure_cooldown_mode: config.retryable_failure_cooldown_mode,
         upstream_no_data_timeout: resolve_upstream_no_data_timeout(
             config.upstream_no_data_timeout_secs,
         )?,

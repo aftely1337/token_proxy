@@ -995,6 +995,7 @@ fn handle_upstream_timeout(
         response: None,
         is_timeout: true,
         should_cooldown: true,
+        cooled_account_id: selected_account_id.map(str::to_string),
     }
 }
 
@@ -1034,6 +1035,7 @@ fn map_upstream_error(
             response: None,
             is_timeout: err.is_timeout(),
             should_cooldown: true,
+            cooled_account_id: selected_account_id.map(str::to_string),
         };
     }
     let error_message = format!("Upstream request failed: {message}");

@@ -198,6 +198,16 @@ fn proxy_config_file_defaults_retryable_failure_cooldown_to_15_seconds() {
 }
 
 #[test]
+fn proxy_config_file_defaults_retryable_failure_cooldown_mode_to_time_window() {
+    let config = ProxyConfigFile::default();
+
+    assert_eq!(
+        config.retryable_failure_cooldown_mode,
+        RetryableFailureCooldownMode::TimeWindow
+    );
+}
+
+#[test]
 fn proxy_config_file_defaults_upstream_strategy_to_fill_first_serial() {
     let config = ProxyConfigFile::default();
 

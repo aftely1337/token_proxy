@@ -35,12 +35,20 @@ fn default_retryable_failure_cooldown_secs() -> u64 {
     15
 }
 
+fn default_retryable_failure_cooldown_mode() -> RetryableFailureCooldownMode {
+    RetryableFailureCooldownMode::TimeWindow
+}
+
 fn default_model_list_prefix() -> bool {
     false
 }
 
 fn is_default_retryable_failure_cooldown_secs(value: &u64) -> bool {
     *value == default_retryable_failure_cooldown_secs()
+}
+
+fn is_default_retryable_failure_cooldown_mode(value: &RetryableFailureCooldownMode) -> bool {
+    *value == default_retryable_failure_cooldown_mode()
 }
 
 fn default_upstream_no_data_timeout_secs() -> u64 {
@@ -71,6 +79,14 @@ pub enum PayloadValueType {
     Number,
     Boolean,
     Json,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RetryableFailureCooldownMode {
+    #[default]
+    TimeWindow,
+    ClearOnLaterSuccess,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -279,6 +295,11 @@ pub struct ProxyConfigFile {
     )]
     pub retryable_failure_cooldown_secs: u64,
     #[serde(
+        default = "default_retryable_failure_cooldown_mode",
+        skip_serializing_if = "is_default_retryable_failure_cooldown_mode"
+    )]
+    pub retryable_failure_cooldown_mode: RetryableFailureCooldownMode,
+    #[serde(
         default = "default_upstream_no_data_timeout_secs",
         skip_serializing_if = "is_default_upstream_no_data_timeout_secs"
     )]
@@ -305,6 +326,7 @@ impl Default for ProxyConfigFile {
             log_level: LogLevel::default(),
             max_request_body_bytes: None,
             retryable_failure_cooldown_secs: default_retryable_failure_cooldown_secs(),
+            retryable_failure_cooldown_mode: default_retryable_failure_cooldown_mode(),
             upstream_no_data_timeout_secs: default_upstream_no_data_timeout_secs(),
             tray_token_rate: TrayTokenRateConfig::default(),
             upstream_strategy: UpstreamStrategy::default(),
@@ -351,6 +373,7 @@ pub struct ProxyConfig {
     pub log_level: LogLevel,
     pub max_request_body_bytes: usize,
     pub retryable_failure_cooldown: std::time::Duration,
+    pub retryable_failure_cooldown_mode: RetryableFailureCooldownMode,
     pub upstream_no_data_timeout: std::time::Duration,
     pub upstream_strategy: UpstreamStrategyRuntime,
     pub payload_rules: PayloadRulesConfig,

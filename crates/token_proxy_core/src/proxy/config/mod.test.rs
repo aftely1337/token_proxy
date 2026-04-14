@@ -14,6 +14,20 @@ fn build_runtime_config_rejects_retryable_failure_cooldown_that_overflows_instan
 }
 
 #[test]
+fn build_runtime_config_maps_retryable_failure_cooldown_mode() {
+    let mut config = ProxyConfigFile::default();
+    config.retryable_failure_cooldown_mode =
+        RetryableFailureCooldownMode::ClearOnLaterSuccess;
+
+    let runtime = build_runtime_config(config).expect("runtime config");
+
+    assert_eq!(
+        runtime.retryable_failure_cooldown_mode,
+        RetryableFailureCooldownMode::ClearOnLaterSuccess
+    );
+}
+
+#[test]
 fn build_runtime_config_rejects_invalid_payload_rule_value_type_pairs() {
     let mut config = ProxyConfigFile::default();
     config.payload_rules.r#override = vec![PayloadValueRuleSet {

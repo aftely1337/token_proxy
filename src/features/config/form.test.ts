@@ -171,6 +171,15 @@ describe("config/form", () => {
     expect(payload.retryable_failure_cooldown_secs).toBe(30);
   });
 
+  it("serializes retryable failure cooldown mode", () => {
+    const payload = toPayload({
+      ...EMPTY_FORM,
+      retryableFailureCooldownMode: "clear_on_later_success",
+    });
+
+    expect(payload.retryable_failure_cooldown_mode).toBe("clear_on_later_success");
+  });
+
   it("defaults upstream no data timeout seconds to 120 when config omits it", () => {
     expect(EMPTY_FORM.upstreamNoDataTimeoutSecs).toBe("120");
 
@@ -204,6 +213,7 @@ describe("config/form", () => {
     });
 
     expect(form.upstreamNoDataTimeoutSecs).toBe("120");
+    expect(form.retryableFailureCooldownMode).toBe("time_window");
     expect(form.modelListPrefix).toBe(false);
     expect(form.upstreams[0]?.apiKeys).toBe("key-a, key-b");
     expect(form.upstreamStrategy).toEqual({
@@ -265,6 +275,29 @@ describe("config/form", () => {
 
     expect(payload.upstreams[0]?.kiro_account_id).toBe("kiro-primary.json");
     expect(payload.upstreams[1]?.codex_account_id).toBe("codex-primary.json");
+  });
+
+  it("loads retryable failure cooldown mode from config", () => {
+    const form = toForm({
+      host: "127.0.0.1",
+      port: 9208,
+      local_api_key: null,
+      app_proxy_url: null,
+      retryable_failure_cooldown_mode: "clear_on_later_success",
+      upstreams: [],
+      tray_token_rate: {
+        enabled: true,
+        format: "split",
+      },
+      upstream_strategy: {
+        order: "fill_first",
+        dispatch: {
+          type: "serial",
+        },
+      },
+    });
+
+    expect(form.retryableFailureCooldownMode).toBe("clear_on_later_success");
   });
 
   it("round-trips payload rules through form serialization", () => {

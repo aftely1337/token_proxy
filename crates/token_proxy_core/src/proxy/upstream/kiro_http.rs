@@ -151,6 +151,7 @@ pub(super) async fn handle_send_error(
                 response: None,
                 is_timeout: true,
                 should_cooldown: true,
+                cooled_account_id: account_id.clone(),
             }
         }
     }

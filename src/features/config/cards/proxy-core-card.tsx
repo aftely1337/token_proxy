@@ -11,7 +11,12 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ProxyServicePanel, type ProxyServiceViewProps } from "@/features/config/cards/proxy-service-card";
-import { type ConfigForm, type KiroPreferredEndpoint } from "@/features/config/types";
+import {
+  RETRYABLE_FAILURE_COOLDOWN_MODES,
+  type ConfigForm,
+  type KiroPreferredEndpoint,
+  type RetryableFailureCooldownMode,
+} from "@/features/config/types";
 import { m } from "@/paraglide/messages.js";
 
 const KIRO_ENDPOINT_OPTIONS: ReadonlyArray<{
@@ -24,6 +29,10 @@ const KIRO_ENDPOINT_OPTIONS: ReadonlyArray<{
 
 function isKiroPreferredEndpoint(value: string): value is KiroPreferredEndpoint {
   return value === "ide" || value === "cli";
+}
+
+function isRetryableFailureCooldownMode(value: string): value is RetryableFailureCooldownMode {
+  return value === "time_window" || value === "clear_on_later_success";
 }
 
 type ProxyCoreCardProps = {
@@ -130,6 +139,33 @@ function ProxyCoreFields({
         </Select>
         <p className="text-xs text-muted-foreground">
           {m.proxy_core_kiro_preferred_endpoint_help()}
+        </p>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="retryable-failure-cooldown-mode">
+          {m.proxy_core_retryable_failure_cooldown_mode_label()}
+        </Label>
+        <Select
+          value={form.retryableFailureCooldownMode}
+          onValueChange={(value) => {
+            if (isRetryableFailureCooldownMode(value)) {
+              onChange({ retryableFailureCooldownMode: value });
+            }
+          }}
+        >
+          <SelectTrigger id="retryable-failure-cooldown-mode">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {RETRYABLE_FAILURE_COOLDOWN_MODES.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label()}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {m.proxy_core_retryable_failure_cooldown_mode_help()}
         </p>
       </div>
       <div className="grid gap-2">

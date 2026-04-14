@@ -23,8 +23,9 @@ use tokio::{runtime::Runtime, sync::RwLock, task::JoinHandle};
 use crate::logging::LogLevel;
 use crate::paths::TokenProxyPaths;
 use crate::proxy::config::{
-    InboundApiFormat, PayloadRulesConfig, ProviderUpstreams, ProxyConfig, UpstreamDispatchRuntime,
-    UpstreamGroup, UpstreamOrderStrategy, UpstreamRuntime, UpstreamStrategyRuntime,
+    InboundApiFormat, PayloadRulesConfig, ProviderUpstreams, ProxyConfig,
+    RetryableFailureCooldownMode, UpstreamDispatchRuntime, UpstreamGroup,
+    UpstreamOrderStrategy, UpstreamRuntime, UpstreamStrategyRuntime,
 };
 
 const FORMATS_ALL: &[InboundApiFormat] = &[
@@ -129,6 +130,7 @@ fn config_with_runtime_upstreams(
         log_level: LogLevel::Silent,
         max_request_body_bytes: 20 * 1024 * 1024,
         retryable_failure_cooldown: std::time::Duration::from_secs(15),
+        retryable_failure_cooldown_mode: crate::proxy::config::RetryableFailureCooldownMode::TimeWindow,
         upstream_no_data_timeout: std::time::Duration::from_secs(120),
         upstream_strategy: UpstreamStrategyRuntime {
             order: UpstreamOrderStrategy::RoundRobin,
@@ -2396,6 +2398,103 @@ fn responses_request_skips_cooling_pinned_codex_account_before_channel_fallback(
 }
 
 #[test]
+fn responses_request_retries_pinned_codex_account_after_channel_success_when_configured() {
+    run_async(async {
+        let free = spawn_mock_upstream(
+            StatusCode::TOO_MANY_REQUESTS,
+            json!({
+                "error": { "message": "free exhausted" }
+            }),
+        )
+        .await;
+        let channel = spawn_mock_upstream(
+            StatusCode::OK,
+            json!({
+                "id": "resp_from_channel",
+                "object": "response",
+                "created_at": 123,
+                "model": "gpt-5.4",
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "id": "msg_1",
+                        "status": "completed",
+                        "role": "assistant",
+                        "content": [
+                            { "type": "output_text", "text": "from channel" }
+                        ]
+                    }
+                ],
+                "usage": { "input_tokens": 1, "output_tokens": 2, "total_tokens": 3 }
+            }),
+        )
+        .await;
+
+        let mut config = config_with_runtime_upstreams(&[
+            (
+                PROVIDER_CODEX,
+                99,
+                "free",
+                free.base_url.as_str(),
+                FORMATS_RESPONSES,
+            ),
+            (
+                PROVIDER_RESPONSES,
+                50,
+                "channel",
+                channel.base_url.as_str(),
+                FORMATS_RESPONSES,
+            ),
+        ]);
+        config.retryable_failure_cooldown = std::time::Duration::from_secs(15);
+        config.retryable_failure_cooldown_mode =
+            RetryableFailureCooldownMode::ClearOnLaterSuccess;
+
+        let data_dir =
+            next_test_data_dir("responses_pinned_codex_clear_cooldown_after_channel_success");
+        let state = build_test_state_handle(config, data_dir.clone()).await;
+        let expires_at = (OffsetDateTime::now_utc() + TimeDuration::days(1))
+            .format(&time::format_description::well_known::Rfc3339)
+            .expect("format expires_at");
+        seed_codex_account(
+            &state,
+            "codex-free.json",
+            "codex-access-free",
+            "chatgpt-free",
+            &expires_at,
+        )
+        .await;
+
+        let (first_status, first_json) = send_responses_request(state.clone()).await;
+        let (second_status, second_json) = send_responses_request(state).await;
+        let free_requests = free.requests();
+        let channel_requests = channel.requests();
+
+        free.abort();
+        channel.abort();
+        let _ = std::fs::remove_dir_all(&data_dir);
+
+        assert_eq!(first_status, StatusCode::OK);
+        assert_eq!(second_status, StatusCode::OK);
+        assert_eq!(
+            first_json["output"][0]["content"][0]["text"].as_str(),
+            Some("from channel")
+        );
+        assert_eq!(
+            second_json["output"][0]["content"][0]["text"].as_str(),
+            Some("from channel")
+        );
+        assert_eq!(
+            free_requests.len(),
+            2,
+            "later channel success should clear the pinned codex account cooldown for the next request"
+        );
+        assert_eq!(channel_requests.len(), 2);
+    });
+}
+
+#[test]
 fn responses_request_does_not_cooldown_same_codex_account_after_400() {
     run_async(async {
         let codex =
@@ -3398,6 +3497,96 @@ fn responses_request_cooldowns_same_provider_upstream_after_401() {
             primary_requests.len(),
             1,
             "401 should cool down the upstream to avoid repeatedly hitting the same invalid account"
+        );
+        assert_eq!(secondary_requests.len(), 2);
+    });
+}
+
+#[test]
+fn responses_request_retries_primary_upstream_after_later_success_when_configured() {
+    run_async(async {
+        let primary = spawn_mock_upstream(
+            StatusCode::UNAUTHORIZED,
+            json!({
+                "error": { "message": "primary unauthorized" }
+            }),
+        )
+        .await;
+        let secondary = spawn_mock_upstream(
+            StatusCode::OK,
+            json!({
+                "id": "resp_from_secondary",
+                "object": "response",
+                "created_at": 123,
+                "model": "gpt-5",
+                "status": "completed",
+                "output": [
+                    {
+                        "type": "message",
+                        "id": "msg_1",
+                        "status": "completed",
+                        "role": "assistant",
+                        "content": [
+                            { "type": "output_text", "text": "from secondary" }
+                        ]
+                    }
+                ],
+                "usage": { "input_tokens": 1, "output_tokens": 2, "total_tokens": 3 }
+            }),
+        )
+        .await;
+
+        let mut config = config_with_runtime_upstreams(&[
+            (
+                PROVIDER_RESPONSES,
+                10,
+                "responses-primary",
+                primary.base_url.as_str(),
+                FORMATS_RESPONSES,
+            ),
+            (
+                PROVIDER_RESPONSES,
+                10,
+                "responses-secondary",
+                secondary.base_url.as_str(),
+                FORMATS_RESPONSES,
+            ),
+        ]);
+        config.upstream_strategy = UpstreamStrategyRuntime {
+            order: UpstreamOrderStrategy::FillFirst,
+            dispatch: UpstreamDispatchRuntime::Serial,
+        };
+        config.retryable_failure_cooldown_mode =
+            RetryableFailureCooldownMode::ClearOnLaterSuccess;
+
+        let data_dir =
+            next_test_data_dir("responses_same_provider_clear_cooldown_on_later_success");
+        let state = build_test_state_handle(config, data_dir.clone()).await;
+
+        let (first_status, first_json) = send_responses_request(state.clone()).await;
+        let (second_status, second_json) = send_responses_request(state).await;
+
+        let primary_requests = primary.requests();
+        let secondary_requests = secondary.requests();
+
+        primary.abort();
+        secondary.abort();
+        let _ = std::fs::remove_dir_all(&data_dir);
+
+        assert_eq!(first_status, StatusCode::OK);
+        assert_eq!(second_status, StatusCode::OK);
+        assert_eq!(
+            first_json["output"][0]["content"][0]["text"].as_str(),
+            Some("from secondary")
+        );
+        assert_eq!(
+            second_json["output"][0]["content"][0]["text"].as_str(),
+            Some("from secondary")
+        );
+        assert_eq!(
+            primary_requests.len(),
+            2,
+            "later success should clear the primary upstream cooldown for the next request"
         );
         assert_eq!(secondary_requests.len(), 2);
     });

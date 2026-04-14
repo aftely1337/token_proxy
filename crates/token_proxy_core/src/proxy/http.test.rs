@@ -12,6 +12,8 @@ fn config_with_local(key: &str) -> ProxyConfig {
         log_level: LogLevel::Silent,
         max_request_body_bytes: 1024,
         retryable_failure_cooldown: std::time::Duration::from_secs(15),
+        retryable_failure_cooldown_mode:
+            crate::proxy::config::RetryableFailureCooldownMode::TimeWindow,
         upstream_no_data_timeout: std::time::Duration::from_secs(120),
         upstream_strategy: crate::proxy::config::UpstreamStrategyRuntime::default(),
         payload_rules: PayloadRulesConfig::default(),
@@ -29,6 +31,8 @@ fn config_without_local() -> ProxyConfig {
         log_level: LogLevel::Silent,
         max_request_body_bytes: 1024,
         retryable_failure_cooldown: std::time::Duration::from_secs(15),
+        retryable_failure_cooldown_mode:
+            crate::proxy::config::RetryableFailureCooldownMode::TimeWindow,
         upstream_no_data_timeout: std::time::Duration::from_secs(120),
         upstream_strategy: crate::proxy::config::UpstreamStrategyRuntime::default(),
         payload_rules: PayloadRulesConfig::default(),

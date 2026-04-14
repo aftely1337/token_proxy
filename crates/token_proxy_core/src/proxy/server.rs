@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 use url::form_urlencoded;
 
 use super::{
-    config::{InboundApiFormat, ProxyConfig},
+    config::{InboundApiFormat, ProxyConfig, RetryableFailureCooldownMode},
     gemini, http,
     inbound::detect_inbound_api_format,
     log::{build_log_entry, LogContext, LogWriter, UsageSnapshot},
@@ -842,6 +842,7 @@ async fn forward_responses_priority_chain(
 ) -> Result<Response, Response> {
     let candidates = build_responses_priority_candidates(&state.config, &prepared.path);
     let mut last_response: Option<Response> = None;
+    let mut cooled_failures: Vec<(&'static str, Vec<String>, Vec<String>)> = Vec::new();
 
     for candidate in candidates {
         if state
@@ -862,7 +863,29 @@ async fn forward_responses_priority_chain(
         )
         .await?;
         if !result.should_fallback {
+            if state.config.retryable_failure_cooldown_mode
+                == RetryableFailureCooldownMode::ClearOnLaterSuccess
+            {
+                for (provider, cooled_upstream_keys, cooled_account_ids) in cooled_failures {
+                    super::upstream::clear_tracked_cooldowns(
+                        &state,
+                        provider,
+                        &cooled_upstream_keys,
+                        &cooled_account_ids,
+                    );
+                }
+            }
             return Ok(result.response);
+        }
+        if state.config.retryable_failure_cooldown_mode
+            == RetryableFailureCooldownMode::ClearOnLaterSuccess
+            && (!result.cooled_upstream_keys.is_empty() || !result.cooled_account_ids.is_empty())
+        {
+            cooled_failures.push((
+                candidate.plan.provider,
+                result.cooled_upstream_keys.clone(),
+                result.cooled_account_ids.clone(),
+            ));
         }
         last_response = Some(result.response);
     }
@@ -1449,7 +1472,7 @@ async fn proxy_request(
                 "primary provider exhausted, falling back to alternate provider"
             );
             match forward_retry_fallback_request(
-                state,
+                state.clone(),
                 method,
                 &uri,
                 &headers,
@@ -1459,7 +1482,19 @@ async fn proxy_request(
             )
             .await
             {
-                Ok(fallback) if !fallback.should_fallback => return fallback.response,
+                Ok(fallback) if !fallback.should_fallback => {
+                    if state.config.retryable_failure_cooldown_mode
+                        == RetryableFailureCooldownMode::ClearOnLaterSuccess
+                    {
+                        super::upstream::clear_tracked_cooldowns(
+                            &state,
+                            prepared.plan.provider,
+                            &primary.cooled_upstream_keys,
+                            &primary.cooled_account_ids,
+                        );
+                    }
+                    return fallback.response;
+                }
                 Ok(_) => {}
                 Err(_) => {
                     tracing::warn!(
