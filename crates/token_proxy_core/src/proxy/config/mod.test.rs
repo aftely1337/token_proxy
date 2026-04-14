@@ -1,4 +1,5 @@
 use super::*;
+use serde_json::json;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -6,6 +7,23 @@ use std::time::Duration;
 fn build_runtime_config_rejects_retryable_failure_cooldown_that_overflows_instant() {
     let mut config = ProxyConfigFile::default();
     config.retryable_failure_cooldown_secs = u64::MAX;
+
+    let result = build_runtime_config(config);
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn build_runtime_config_rejects_invalid_payload_rule_value_type_pairs() {
+    let mut config = ProxyConfigFile::default();
+    config.payload_rules.r#override = vec![PayloadValueRuleSet {
+        models: vec!["gpt-5.4".to_string()],
+        params: vec![PayloadParamRule {
+            path: "temperature".to_string(),
+            value_type: PayloadValueType::Number,
+            value: json!("not-a-number"),
+        }],
+    }];
 
     let result = build_runtime_config(config);
 

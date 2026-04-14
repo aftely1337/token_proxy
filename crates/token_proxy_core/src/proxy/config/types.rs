@@ -1,5 +1,6 @@
 use axum::http::header::{HeaderName, HeaderValue};
 use serde::{de, Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 
 use super::model_mapping::ModelMappingRules;
@@ -50,6 +51,10 @@ fn is_default_upstream_no_data_timeout_secs(value: &u64) -> bool {
     *value == default_upstream_no_data_timeout_secs()
 }
 
+fn is_empty_payload_rules(value: &PayloadRulesConfig) -> bool {
+    value.r#default.is_empty() && value.r#override.is_empty() && value.filter.is_empty()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InboundApiFormat {
@@ -57,6 +62,48 @@ pub enum InboundApiFormat {
     OpenaiResponses,
     AnthropicMessages,
     Gemini,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PayloadValueType {
+    String,
+    Number,
+    Boolean,
+    Json,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PayloadParamRule {
+    pub path: String,
+    pub value_type: PayloadValueType,
+    pub value: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct PayloadValueRuleSet {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub models: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<PayloadParamRule>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct PayloadFilterRuleSet {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub models: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub struct PayloadRulesConfig {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub r#default: Vec<PayloadValueRuleSet>,
+    #[serde(default, rename = "override", skip_serializing_if = "Vec::is_empty")]
+    pub r#override: Vec<PayloadValueRuleSet>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filter: Vec<PayloadFilterRuleSet>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -240,6 +287,8 @@ pub struct ProxyConfigFile {
     pub tray_token_rate: TrayTokenRateConfig,
     #[serde(default)]
     pub upstream_strategy: UpstreamStrategy,
+    #[serde(default, skip_serializing_if = "is_empty_payload_rules")]
+    pub payload_rules: PayloadRulesConfig,
     #[serde(default)]
     pub upstreams: Vec<UpstreamConfig>,
 }
@@ -259,6 +308,7 @@ impl Default for ProxyConfigFile {
             upstream_no_data_timeout_secs: default_upstream_no_data_timeout_secs(),
             tray_token_rate: TrayTokenRateConfig::default(),
             upstream_strategy: UpstreamStrategy::default(),
+            payload_rules: PayloadRulesConfig::default(),
             upstreams: Vec::new(),
         }
     }
@@ -303,6 +353,7 @@ pub struct ProxyConfig {
     pub retryable_failure_cooldown: std::time::Duration,
     pub upstream_no_data_timeout: std::time::Duration,
     pub upstream_strategy: UpstreamStrategyRuntime,
+    pub payload_rules: PayloadRulesConfig,
     pub upstreams: HashMap<String, ProviderUpstreams>,
     pub kiro_preferred_endpoint: Option<KiroPreferredEndpoint>,
 }

@@ -1,6 +1,6 @@
 use super::*;
 use crate::logging::LogLevel;
-use crate::proxy::config::UpstreamRuntime;
+use crate::proxy::config::{PayloadRulesConfig, UpstreamRuntime};
 use std::collections::HashMap;
 
 fn config_with_local(key: &str) -> ProxyConfig {
@@ -14,6 +14,7 @@ fn config_with_local(key: &str) -> ProxyConfig {
         retryable_failure_cooldown: std::time::Duration::from_secs(15),
         upstream_no_data_timeout: std::time::Duration::from_secs(120),
         upstream_strategy: crate::proxy::config::UpstreamStrategyRuntime::default(),
+        payload_rules: PayloadRulesConfig::default(),
         upstreams: HashMap::new(),
         kiro_preferred_endpoint: None,
     }
@@ -30,6 +31,7 @@ fn config_without_local() -> ProxyConfig {
         retryable_failure_cooldown: std::time::Duration::from_secs(15),
         upstream_no_data_timeout: std::time::Duration::from_secs(120),
         upstream_strategy: crate::proxy::config::UpstreamStrategyRuntime::default(),
+        payload_rules: PayloadRulesConfig::default(),
         upstreams: HashMap::new(),
         kiro_preferred_endpoint: None,
     }

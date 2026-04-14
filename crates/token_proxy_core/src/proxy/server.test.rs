@@ -23,8 +23,8 @@ use tokio::{runtime::Runtime, sync::RwLock, task::JoinHandle};
 use crate::logging::LogLevel;
 use crate::paths::TokenProxyPaths;
 use crate::proxy::config::{
-    InboundApiFormat, ProviderUpstreams, ProxyConfig, UpstreamDispatchRuntime, UpstreamGroup,
-    UpstreamOrderStrategy, UpstreamRuntime, UpstreamStrategyRuntime,
+    InboundApiFormat, PayloadRulesConfig, ProviderUpstreams, ProxyConfig, UpstreamDispatchRuntime,
+    UpstreamGroup, UpstreamOrderStrategy, UpstreamRuntime, UpstreamStrategyRuntime,
 };
 
 const FORMATS_ALL: &[InboundApiFormat] = &[
@@ -134,6 +134,7 @@ fn config_with_runtime_upstreams(
             order: UpstreamOrderStrategy::RoundRobin,
             dispatch: UpstreamDispatchRuntime::Serial,
         },
+        payload_rules: PayloadRulesConfig::default(),
         upstreams: provider_map,
         kiro_preferred_endpoint: None,
     }

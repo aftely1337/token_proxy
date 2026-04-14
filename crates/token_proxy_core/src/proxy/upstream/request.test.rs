@@ -1,5 +1,9 @@
 use super::*;
 use axum::http::header::AUTHORIZATION;
+use crate::proxy::config::{
+    PayloadFilterRuleSet, PayloadParamRule, PayloadRulesConfig, PayloadValueRuleSet,
+    PayloadValueType,
+};
 use url::form_urlencoded;
 
 fn gemini_upstream() -> UpstreamRuntime {
@@ -119,6 +123,59 @@ async fn filters_prompt_cache_retention_for_openai_responses_upstream() {
 
     assert!(value.get("prompt_cache_retention").is_none());
     assert_eq!(value.get("model").and_then(Value::as_str), Some("gpt-4o"));
+}
+
+#[tokio::test]
+async fn applies_global_payload_rules_to_matching_models() {
+    let body = ReplayableBody::from_bytes(Bytes::from_static(
+        br#"{"model":"gpt-5.4","reasoning":{"summary":"verbose"}}"#,
+    ));
+    let meta = RequestMeta {
+        stream: false,
+        original_model: Some("gpt-5.4".to_string()),
+        mapped_model: None,
+        reasoning_effort: None,
+        estimated_input_tokens: None,
+    };
+    let rules = PayloadRulesConfig {
+        r#default: vec![PayloadValueRuleSet {
+            models: vec!["gpt-5.4".to_string()],
+            params: vec![PayloadParamRule {
+                path: "instructions".to_string(),
+                value_type: PayloadValueType::String,
+                value: Value::String("Default instructions".to_string()),
+            }],
+        }],
+        r#override: vec![PayloadValueRuleSet {
+            models: vec!["gpt-5.4".to_string()],
+            params: vec![PayloadParamRule {
+                path: "service_tier".to_string(),
+                value_type: PayloadValueType::String,
+                value: Value::String("priority".to_string()),
+            }],
+        }],
+        filter: vec![PayloadFilterRuleSet {
+            models: vec!["gpt-5.4".to_string()],
+            paths: vec!["reasoning.summary".to_string()],
+        }],
+    };
+
+    let rewritten = match maybe_apply_global_payload_rules(&body, &meta, &rules).await {
+        Ok(Some(value)) => value,
+        Ok(None) => panic!("expected rewritten body"),
+        Err(_) => panic!("apply payload rules"),
+    };
+
+    let bytes = rewritten
+        .read_bytes_if_small(1024)
+        .await
+        .expect("read rewritten bytes")
+        .expect("rewritten body exists");
+    let value: Value = serde_json::from_slice(&bytes).expect("json");
+
+    assert_eq!(value["instructions"], "Default instructions");
+    assert_eq!(value["service_tier"], "priority");
+    assert!(value["reasoning"].get("summary").is_none());
 }
 
 #[tokio::test]

@@ -2,6 +2,7 @@ use super::*;
 use crate::app_proxy;
 use crate::logging::LogLevel;
 use crate::paths::TokenProxyPaths;
+use crate::proxy::config::PayloadRulesConfig;
 use rand::random;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -22,6 +23,7 @@ fn config_with_addr_and_body_limit(
         retryable_failure_cooldown: Duration::from_secs(15),
         upstream_no_data_timeout: Duration::from_secs(120),
         upstream_strategy: crate::proxy::config::UpstreamStrategyRuntime::default(),
+        payload_rules: PayloadRulesConfig::default(),
         upstreams: HashMap::new(),
         kiro_preferred_endpoint: None,
     }

@@ -8,3 +8,4 @@ export { ClientSetupCard } from "./client-setup-card";
 export { ValidationCard } from "./validation-card";
 export { UpdateCard } from "./update-card";
 export { ProjectLinksCard } from "./project-links-card";
+export { PayloadRulesCard } from "./payload-rules-card";

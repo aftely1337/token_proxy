@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_FORM,
   createEmptyUpstream,
+  createPayloadFilterRule,
+  createPayloadParam,
+  createPayloadValueRule,
   extractConfigExtras,
   mergeConfigExtras,
   syncAccountBackedUpstreams,
@@ -262,6 +265,207 @@ describe("config/form", () => {
 
     expect(payload.upstreams[0]?.kiro_account_id).toBe("kiro-primary.json");
     expect(payload.upstreams[1]?.codex_account_id).toBe("codex-primary.json");
+  });
+
+  it("round-trips payload rules through form serialization", () => {
+    const form = toForm({
+      host: "127.0.0.1",
+      port: 9208,
+      local_api_key: null,
+      app_proxy_url: null,
+      payload_rules: {
+        default: [
+          {
+            models: ["gpt-5.4"],
+            params: [
+              {
+                path: "instructions",
+                value_type: "string",
+                value: "You are an IT software development expert",
+              },
+            ],
+          },
+        ],
+        override: [
+          {
+            models: ["gpt-5.4"],
+            params: [
+              {
+                path: "service_tier",
+                value_type: "string",
+                value: "priority",
+              },
+            ],
+          },
+        ],
+        filter: [
+          {
+            models: ["gpt-5.4"],
+            paths: ["reasoning.summary"],
+          },
+        ],
+      },
+      upstreams: [],
+      tray_token_rate: {
+        enabled: true,
+        format: "split",
+      },
+      upstream_strategy: {
+        order: "fill_first",
+        dispatch: {
+          type: "serial",
+        },
+      },
+    });
+
+    expect(form.payloadRules.defaultRules[0]?.models).toEqual(["gpt-5.4"]);
+    expect(form.payloadRules.overrideRules[0]?.params[0]?.value).toBe("priority");
+    expect(form.payloadRules.filterRules[0]?.paths).toEqual(["reasoning.summary"]);
+
+    const payload = toPayload(form);
+    expect(payload.payload_rules).toEqual({
+      default: [
+        {
+          models: ["gpt-5.4"],
+          params: [
+            {
+              path: "instructions",
+              value_type: "string",
+              value: "You are an IT software development expert",
+            },
+          ],
+        },
+      ],
+      override: [
+        {
+          models: ["gpt-5.4"],
+          params: [
+            {
+              path: "service_tier",
+              value_type: "string",
+              value: "priority",
+            },
+          ],
+        },
+      ],
+      filter: [
+        {
+          models: ["gpt-5.4"],
+          paths: ["reasoning.summary"],
+        },
+      ],
+    });
+  });
+
+  it("serializes typed payload rule values", () => {
+    const defaultRule = createPayloadValueRule();
+    defaultRule.models = ["gpt-5.4"];
+    defaultRule.params = [
+      createPayloadParam("metadata", "json", "{\"source\":\"token_proxy\"}"),
+      createPayloadParam("temperature", "number", "0.2"),
+      createPayloadParam("stream", "boolean", "true"),
+    ];
+
+    const payload = toPayload({
+      ...EMPTY_FORM,
+      payloadRules: {
+        defaultRules: [defaultRule],
+        overrideRules: [],
+        filterRules: [],
+      },
+    });
+
+    expect(payload.payload_rules).toEqual({
+      default: [
+        {
+          models: ["gpt-5.4"],
+          params: [
+            {
+              path: "metadata",
+              value_type: "json",
+              value: { source: "token_proxy" },
+            },
+            {
+              path: "temperature",
+              value_type: "number",
+              value: 0.2,
+            },
+            {
+              path: "stream",
+              value_type: "boolean",
+              value: true,
+            },
+          ],
+        },
+      ],
+      override: [],
+      filter: [],
+    });
+  });
+
+  it("validates payload rules for exact model, path, and typed values", () => {
+    const defaultRule = createPayloadValueRule();
+    defaultRule.models = [""];
+    defaultRule.params = [createPayloadParam("instructions", "string", "hello")];
+
+    expect(
+      validate({
+        ...EMPTY_FORM,
+        payloadRules: {
+          defaultRules: [defaultRule],
+          overrideRules: [],
+          filterRules: [],
+        },
+      })
+    ).toEqual({
+      valid: false,
+      message: m.error_payload_rule_model_required({ kind: "default", row: "1" }),
+    });
+
+    defaultRule.models = ["gpt-5.4"];
+    defaultRule.params = [createPayloadParam("tools[0]", "string", "hello")];
+    expect(
+      validate({
+        ...EMPTY_FORM,
+        payloadRules: {
+          defaultRules: [defaultRule],
+          overrideRules: [],
+          filterRules: [],
+        },
+      })
+    ).toEqual({
+      valid: false,
+      message: m.error_payload_rule_path_invalid({ kind: "default", row: "1.1" }),
+    });
+
+    defaultRule.params = [createPayloadParam("temperature", "number", "abc")];
+    expect(
+      validate({
+        ...EMPTY_FORM,
+        payloadRules: {
+          defaultRules: [defaultRule],
+          overrideRules: [],
+          filterRules: [],
+        },
+      })
+    ).toEqual({
+      valid: false,
+      message: m.error_payload_rule_value_invalid({ kind: "default", row: "1.1" }),
+    });
+
+    const filterRule = createPayloadFilterRule();
+    filterRule.models = ["gpt-5.4"];
+    filterRule.paths = ["reasoning.summary"];
+    expect(
+      validate({
+        ...EMPTY_FORM,
+        payloadRules: {
+          defaultRules: [],
+          overrideRules: [],
+          filterRules: [filterRule],
+        },
+      }).valid
+    ).toBe(true);
   });
 
   it("drops upstream base_url and proxy_url for kiro and codex providers", () => {

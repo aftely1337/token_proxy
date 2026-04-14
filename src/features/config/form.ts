@@ -3,6 +3,15 @@ import {
   type InboundApiFormat,
   type KiroPreferredEndpoint,
   type ModelMappingForm,
+  type PayloadFilterRuleConfig,
+  type PayloadFilterRuleForm,
+  type PayloadParamConfig,
+  type PayloadParamForm,
+  type PayloadRuleValueType,
+  type PayloadRulesConfig,
+  type PayloadRulesForm,
+  type PayloadValueRuleConfig,
+  type PayloadValueRuleForm,
   type ProxyConfigFile,
   type ProxyConfigFileBase,
   type TrayTokenRateConfig,
@@ -36,6 +45,8 @@ const INTEGER_PATTERN = /^-?\d+$/;
 const NON_NEGATIVE_INTEGER_PATTERN = /^\d+$/;
 const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/;
 let modelMappingCounter = 0;
+let payloadRuleCounter = 0;
+let payloadParamCounter = 0;
 
 const TRAY_TOKEN_RATE_FORMAT_VALUES: ReadonlySet<string> = new Set(
   TRAY_TOKEN_RATE_FORMATS.map((format) => format.value)
@@ -90,6 +101,7 @@ const KNOWN_CONFIG_KEYS: ReadonlySet<string> = new Set([
   "upstream_no_data_timeout_secs",
   "tray_token_rate",
   "upstream_strategy",
+  "payload_rules",
   "upstreams",
 ]);
 
@@ -109,6 +121,11 @@ export const EMPTY_FORM: ConfigForm = {
     dispatchType: "serial",
     hedgeDelayMs: String(DEFAULT_HEDGE_DELAY_MS),
     maxParallel: String(DEFAULT_MAX_PARALLEL),
+  },
+  payloadRules: {
+    defaultRules: [],
+    overrideRules: [],
+    filterRules: [],
   },
   upstreams: [],
 };
@@ -155,6 +172,38 @@ export function createModelMapping(pattern = "", target = "") {
   };
 }
 
+export function createPayloadParam(
+  path = "",
+  valueType: PayloadRuleValueType = "string",
+  value = ""
+): PayloadParamForm {
+  payloadParamCounter += 1;
+  return {
+    id: `payload-param-${Date.now()}-${payloadParamCounter}`,
+    path,
+    valueType,
+    value,
+  };
+}
+
+export function createPayloadValueRule(): PayloadValueRuleForm {
+  payloadRuleCounter += 1;
+  return {
+    id: `payload-value-rule-${Date.now()}-${payloadRuleCounter}`,
+    models: [""],
+    params: [createPayloadParam()],
+  };
+}
+
+export function createPayloadFilterRule(): PayloadFilterRuleForm {
+  payloadRuleCounter += 1;
+  return {
+    id: `payload-filter-rule-${Date.now()}-${payloadRuleCounter}`,
+    models: [""],
+    paths: [""],
+  };
+}
+
 export function extractConfigExtras(config: ProxyConfigFile) {
   const extras: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(config)) {
@@ -190,6 +239,7 @@ export function toForm(config: ProxyConfigFile): ConfigForm {
     ),
     trayTokenRate: normalizeTrayTokenRate(config.tray_token_rate),
     upstreamStrategy: toUpstreamStrategyForm(config.upstream_strategy),
+    payloadRules: toPayloadRulesForm(config.payload_rules),
     upstreams: config.upstreams.map((upstream) => {
       const providers = upstream.providers ?? [];
       const omitNetworkFields = isAccountBackedProviderSet(providers);
@@ -234,6 +284,7 @@ export function toPayload(form: ConfigForm): ProxyConfigFile {
     ),
     tray_token_rate: form.trayTokenRate,
     upstream_strategy: toUpstreamStrategyPayload(form.upstreamStrategy),
+    payload_rules: toPayloadRulesPayload(form.payloadRules),
     upstreams: form.upstreams.map((upstream) => {
       const providers = normalizeProviders(upstream.providers);
       const apiKeys = parseApiKeysInput(upstream.apiKeys);
@@ -320,6 +371,10 @@ export function validate(form: ConfigForm) {
   const upstreamStrategyError = validateUpstreamStrategy(form.upstreamStrategy);
   if (upstreamStrategyError) {
     return { valid: false, message: upstreamStrategyError };
+  }
+  const payloadRulesError = validatePayloadRules(form.payloadRules);
+  if (payloadRulesError) {
+    return { valid: false, message: payloadRulesError };
   }
 
   const ids = new Set<string>();
@@ -473,6 +528,108 @@ function normalizeTrayTokenRate(value: TrayTokenRateConfig) {
     return { ...value, format: DEFAULT_TRAY_TOKEN_RATE.format };
   }
   return value;
+}
+
+function toPayloadRulesForm(config?: PayloadRulesConfig): PayloadRulesForm {
+  return {
+    defaultRules: (config?.default ?? []).map(toPayloadValueRuleForm),
+    overrideRules: (config?.override ?? []).map(toPayloadValueRuleForm),
+    filterRules: (config?.filter ?? []).map(toPayloadFilterRuleForm),
+  };
+}
+
+function toPayloadValueRuleForm(rule: PayloadValueRuleConfig): PayloadValueRuleForm {
+  payloadRuleCounter += 1;
+  return {
+    id: `payload-value-rule-${Date.now()}-${payloadRuleCounter}`,
+    models: rule.models.length ? [...rule.models] : [""],
+    params: rule.params.length
+      ? rule.params.map(toPayloadParamForm)
+      : [createPayloadParam()],
+  };
+}
+
+function toPayloadParamForm(param: PayloadParamConfig): PayloadParamForm {
+  payloadParamCounter += 1;
+  return {
+    id: `payload-param-${Date.now()}-${payloadParamCounter}`,
+    path: param.path,
+    valueType: param.value_type,
+    value:
+      param.value_type === "json"
+        ? JSON.stringify(param.value)
+        : typeof param.value === "string"
+          ? param.value
+          : String(param.value),
+  };
+}
+
+function toPayloadFilterRuleForm(rule: PayloadFilterRuleConfig): PayloadFilterRuleForm {
+  payloadRuleCounter += 1;
+  return {
+    id: `payload-filter-rule-${Date.now()}-${payloadRuleCounter}`,
+    models: rule.models.length ? [...rule.models] : [""],
+    paths: rule.paths.length ? [...rule.paths] : [""],
+  };
+}
+
+function toPayloadRulesPayload(form: PayloadRulesForm): PayloadRulesConfig {
+  return {
+    default: form.defaultRules
+      .map(toPayloadValueRulePayload)
+      .filter((rule) => rule.models.length && rule.params.length),
+    override: form.overrideRules
+      .map(toPayloadValueRulePayload)
+      .filter((rule) => rule.models.length && rule.params.length),
+    filter: form.filterRules
+      .map(toPayloadFilterRulePayload)
+      .filter((rule) => rule.models.length && rule.paths.length),
+  };
+}
+
+function toPayloadValueRulePayload(rule: PayloadValueRuleForm): PayloadValueRuleConfig {
+  return {
+    models: rule.models.map((model) => model.trim()).filter(Boolean),
+    params: rule.params
+      .map((param) => toPayloadParamPayload(param))
+      .filter((param): param is PayloadParamConfig => param !== null),
+  };
+}
+
+function toPayloadParamPayload(param: PayloadParamForm): PayloadParamConfig | null {
+  const path = param.path.trim();
+  if (!path) {
+    return null;
+  }
+  return {
+    path,
+    value_type: param.valueType,
+    value: parsePayloadRuleValue(param.valueType, param.value),
+  };
+}
+
+function toPayloadFilterRulePayload(rule: PayloadFilterRuleForm): PayloadFilterRuleConfig {
+  return {
+    models: rule.models.map((model) => model.trim()).filter(Boolean),
+    paths: rule.paths.map((path) => path.trim()).filter(Boolean),
+  };
+}
+
+function parsePayloadRuleValue(
+  valueType: PayloadRuleValueType,
+  rawValue: string
+): PayloadParamConfig["value"] {
+  const trimmed = rawValue.trim();
+  switch (valueType) {
+    case "string":
+      return rawValue;
+    case "number":
+      return Number(trimmed);
+    case "boolean":
+      return trimmed.toLowerCase() === "true";
+    case "json":
+      return JSON.parse(trimmed || "null") as PayloadParamConfig["value"];
+  }
 }
 
 function toUpstreamStrategyForm(strategy: UpstreamStrategy): ConfigForm["upstreamStrategy"] {
@@ -659,6 +816,102 @@ function validateHeaderOverrides(
     }
   }
   return "";
+}
+
+function validatePayloadRules(payloadRules: PayloadRulesForm) {
+  const defaultError = validatePayloadValueRules(payloadRules.defaultRules, "default");
+  if (defaultError) {
+    return defaultError;
+  }
+  const overrideError = validatePayloadValueRules(payloadRules.overrideRules, "override");
+  if (overrideError) {
+    return overrideError;
+  }
+  return validatePayloadFilterRules(payloadRules.filterRules);
+}
+
+function validatePayloadValueRules(
+  rules: PayloadValueRuleForm[],
+  ruleKind: "default" | "override"
+) {
+  for (let index = 0; index < rules.length; index += 1) {
+    const row = String(index + 1);
+    const rule = rules[index];
+    const models = rule?.models.map((model) => model.trim()).filter(Boolean) ?? [];
+    if (!models.length) {
+      return m.error_payload_rule_model_required({ kind: ruleKind, row });
+    }
+    const params = rule?.params ?? [];
+    if (!params.length) {
+      return m.error_payload_rule_param_required({ kind: ruleKind, row });
+    }
+    for (let paramIndex = 0; paramIndex < params.length; paramIndex += 1) {
+      const paramRow = `${row}.${paramIndex + 1}`;
+      const path = params[paramIndex]?.path.trim() ?? "";
+      if (!isValidPayloadRulePath(path)) {
+        return m.error_payload_rule_path_invalid({ kind: ruleKind, row: paramRow });
+      }
+      const parseError = validatePayloadRuleValue(
+        params[paramIndex]?.valueType ?? "string",
+        params[paramIndex]?.value ?? ""
+      );
+      if (parseError) {
+        return m.error_payload_rule_value_invalid({ kind: ruleKind, row: paramRow });
+      }
+    }
+  }
+  return "";
+}
+
+function validatePayloadFilterRules(rules: PayloadFilterRuleForm[]) {
+  for (let index = 0; index < rules.length; index += 1) {
+    const row = String(index + 1);
+    const rule = rules[index];
+    const models = rule?.models.map((model) => model.trim()).filter(Boolean) ?? [];
+    if (!models.length) {
+      return m.error_payload_rule_model_required({ kind: "filter", row });
+    }
+    const paths = rule?.paths ?? [];
+    if (!paths.length) {
+      return m.error_payload_rule_param_required({ kind: "filter", row });
+    }
+    for (let pathIndex = 0; pathIndex < paths.length; pathIndex += 1) {
+      const path = paths[pathIndex]?.trim() ?? "";
+      if (!isValidPayloadRulePath(path)) {
+        return m.error_payload_rule_path_invalid({
+          kind: "filter",
+          row: `${row}.${pathIndex + 1}`,
+        });
+      }
+    }
+  }
+  return "";
+}
+
+function isValidPayloadRulePath(value: string) {
+  if (!value) {
+    return false;
+  }
+  return value.split(".").every((segment) => /^[A-Za-z0-9_-]+$/.test(segment));
+}
+
+function validatePayloadRuleValue(valueType: PayloadRuleValueType, rawValue: string) {
+  const trimmed = rawValue.trim();
+  try {
+    switch (valueType) {
+      case "string":
+        return "";
+      case "number":
+        return Number.isFinite(Number(trimmed)) ? "" : "invalid";
+      case "boolean":
+        return trimmed === "true" || trimmed === "false" ? "" : "invalid";
+      case "json":
+        JSON.parse(trimmed || "null");
+        return "";
+    }
+  } catch (_) {
+    return "invalid";
+  }
 }
 
 function isValidOptionalInt(value: string) {

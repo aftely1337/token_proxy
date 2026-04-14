@@ -4,6 +4,7 @@ mod model_mapping;
 mod normalize;
 mod types;
 
+use super::payload_rules;
 use crate::paths::TokenProxyPaths;
 use std::time::{Duration, Instant};
 
@@ -11,7 +12,8 @@ const DEFAULT_MAX_REQUEST_BODY_BYTES: u64 = 20 * 1024 * 1024;
 const MIN_UPSTREAM_NO_DATA_TIMEOUT_SECS: u64 = 3;
 
 pub use types::{
-    ConfigResponse, HeaderOverride, InboundApiFormat, KiroPreferredEndpoint, ProviderUpstreams,
+    ConfigResponse, HeaderOverride, InboundApiFormat, KiroPreferredEndpoint, PayloadFilterRuleSet,
+    PayloadParamRule, PayloadRulesConfig, PayloadValueRuleSet, PayloadValueType, ProviderUpstreams,
     ProxyConfig, ProxyConfigFile, TrayTokenRateConfig, TrayTokenRateFormat, UpstreamConfig,
     UpstreamDispatchRuntime, UpstreamDispatchStrategy, UpstreamGroup, UpstreamOrderStrategy,
     UpstreamOverrides, UpstreamRuntime, UpstreamStrategy, UpstreamStrategyRuntime,
@@ -61,6 +63,7 @@ fn build_runtime_config(config: ProxyConfigFile) -> Result<ProxyConfig, String> 
     let log_level = config.log_level;
     let max_request_body_bytes = resolve_max_request_body_bytes(config.max_request_body_bytes);
     let app_proxy_url = normalize_app_proxy_url(config.app_proxy_url.as_deref())?;
+    payload_rules::validate_payload_rules_config(&config.payload_rules)?;
     let normalized_upstreams =
         normalize::normalize_upstreams(&config.upstreams, app_proxy_url.as_deref())?;
     let upstreams = normalize::build_provider_upstreams(normalized_upstreams)?;
@@ -78,6 +81,7 @@ fn build_runtime_config(config: ProxyConfigFile) -> Result<ProxyConfig, String> 
             config.upstream_no_data_timeout_secs,
         )?,
         upstream_strategy: resolve_upstream_strategy(config.upstream_strategy)?,
+        payload_rules: config.payload_rules,
         upstreams,
         kiro_preferred_endpoint: config.kiro_preferred_endpoint,
     })

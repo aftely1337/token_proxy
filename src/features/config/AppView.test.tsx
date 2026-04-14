@@ -19,6 +19,7 @@ vi.mock("@/features/config/cards", () => ({
   ConfigFileCard: () => <div data-testid="config-file-card" />,
   AutoStartCard: () => <div data-testid="auto-start-card" />,
   ProjectLinksCard: () => <div data-testid="project-links-card" />,
+  PayloadRulesCard: () => <div data-testid="payload-rules-card" />,
   ProxyCoreCard: () => <div data-testid="proxy-core-card" />,
   TrayTokenRateCard: () => <div data-testid="tray-token-rate-card" />,
   UpdateCard: () => <div data-testid="update-card" />,
@@ -158,5 +159,21 @@ describe("config/AppView", () => {
     expect(
       screen.getByText(m.error_upstream_no_data_timeout_secs_integer())
     ).toBeInTheDocument();
+  });
+
+  it("renders payload rules card in settings", () => {
+    render(
+      <AppView
+        activeSectionId="settings"
+        {...BASE_APP_VIEW_PROPS}
+        status="idle"
+        statusMessage=""
+        canSave={false}
+        isDirty={false}
+        validation={{ valid: true, message: "" }}
+      />
+    );
+
+    expect(screen.getByTestId("payload-rules-card")).toBeInTheDocument();
   });
 });

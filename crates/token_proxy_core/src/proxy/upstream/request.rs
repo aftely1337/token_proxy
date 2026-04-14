@@ -11,8 +11,9 @@ use url::Url;
 use super::super::http::RequestAuth;
 use super::super::{
     codex_compat,
-    config::{HeaderOverride, UpstreamRuntime},
+    config::{HeaderOverride, PayloadRulesConfig, UpstreamRuntime},
     http, model,
+    payload_rules,
     request_body::ReplayableBody,
     RequestMeta,
 };
@@ -122,9 +123,13 @@ pub(super) async fn build_upstream_body(
     upstream_path_with_query: &str,
     body: &ReplayableBody,
     meta: &RequestMeta,
+    payload_rules_config: &PayloadRulesConfig,
 ) -> Result<reqwest::Body, AttemptOutcome> {
-    let mapped_body = maybe_rewrite_request_body_model(body, meta).await?;
-    let mapped_source = mapped_body.as_ref().unwrap_or(body);
+    let payload_rules_body =
+        maybe_apply_global_payload_rules(body, meta, payload_rules_config).await?;
+    let payload_source = payload_rules_body.as_ref().unwrap_or(body);
+    let mapped_body = maybe_rewrite_request_body_model(payload_source, meta).await?;
+    let mapped_source = mapped_body.as_ref().unwrap_or(payload_source);
     let upstream_path = split_path_query(upstream_path_with_query).0;
     let reasoning_body =
         match super::super::server_helpers::maybe_rewrite_openai_reasoning_effort_from_model_suffix(
@@ -146,6 +151,7 @@ pub(super) async fn build_upstream_body(
     let source = reasoning_body
         .as_ref()
         .or(mapped_body.as_ref())
+        .or(payload_rules_body.as_ref())
         .unwrap_or(body);
     let filtered = maybe_filter_openai_responses_request_fields(
         provider,
@@ -167,6 +173,18 @@ pub(super) async fn build_upstream_body(
             format!("Failed to read cached request body: {err}"),
         ))
     })
+}
+
+async fn maybe_apply_global_payload_rules(
+    body: &ReplayableBody,
+    meta: &RequestMeta,
+    payload_rules_config: &PayloadRulesConfig,
+) -> Result<Option<ReplayableBody>, AttemptOutcome> {
+    payload_rules::maybe_apply_payload_rules(body, meta, payload_rules_config, REQUEST_FILTER_LIMIT_BYTES)
+        .await
+        .map_err(|message| {
+            AttemptOutcome::Fatal(http::error_response(StatusCode::BAD_GATEWAY, message))
+        })
 }
 
 async fn maybe_rewrite_developer_role_to_system(

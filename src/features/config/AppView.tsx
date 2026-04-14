@@ -23,6 +23,7 @@ import {
   ConfigFileCard,
   AutoStartCard,
   ProjectLinksCard,
+  PayloadRulesCard,
   ProxyCoreCard,
   TrayTokenRateCard,
   UpdateCard,
@@ -301,6 +302,10 @@ function ConfigSectionBody({
           <TrayTokenRateCard
             value={props.form.trayTokenRate}
             onChange={(nextValue) => props.onFormChange({ trayTokenRate: nextValue })}
+          />
+          <PayloadRulesCard
+            value={props.form.payloadRules}
+            onChange={(payloadRules) => props.onFormChange({ payloadRules })}
           />
           <ValidationCard form={props.form} validation={props.validation} />
           <ProjectLinksCard />

@@ -16,6 +16,7 @@ pub mod logs;
 mod model;
 mod openai;
 mod openai_compat;
+mod payload_rules;
 mod redact;
 mod request_body;
 pub mod request_detail;

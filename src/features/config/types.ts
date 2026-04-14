@@ -48,6 +48,30 @@ export type InboundApiFormat =
   | "anthropic_messages"
   | "gemini";
 
+export type PayloadRuleValueType = "string" | "number" | "boolean" | "json";
+
+export type PayloadParamConfig = {
+  path: string;
+  value_type: PayloadRuleValueType;
+  value: string | number | boolean | null | Record<string, unknown> | unknown[];
+};
+
+export type PayloadValueRuleConfig = {
+  models: string[];
+  params: PayloadParamConfig[];
+};
+
+export type PayloadFilterRuleConfig = {
+  models: string[];
+  paths: string[];
+};
+
+export type PayloadRulesConfig = {
+  default: PayloadValueRuleConfig[];
+  override: PayloadValueRuleConfig[];
+  filter: PayloadFilterRuleConfig[];
+};
+
 export type UpstreamConfig = {
   id: string;
   /**
@@ -113,6 +137,7 @@ export type ProxyConfigFileBase = {
   upstream_no_data_timeout_secs?: number;
   tray_token_rate: TrayTokenRateConfig;
   upstream_strategy: UpstreamStrategy;
+  payload_rules?: PayloadRulesConfig;
   upstreams: UpstreamConfig[];
 };
 
@@ -173,6 +198,31 @@ export type ModelMappingForm = {
   target: string;
 };
 
+export type PayloadParamForm = {
+  id: string;
+  path: string;
+  valueType: PayloadRuleValueType;
+  value: string;
+};
+
+export type PayloadValueRuleForm = {
+  id: string;
+  models: string[];
+  params: PayloadParamForm[];
+};
+
+export type PayloadFilterRuleForm = {
+  id: string;
+  models: string[];
+  paths: string[];
+};
+
+export type PayloadRulesForm = {
+  defaultRules: PayloadValueRuleForm[];
+  overrideRules: PayloadValueRuleForm[];
+  filterRules: PayloadFilterRuleForm[];
+};
+
 export type ConfigForm = {
   host: string;
   port: string;
@@ -190,5 +240,6 @@ export type ConfigForm = {
     hedgeDelayMs: string;
     maxParallel: string;
   };
+  payloadRules: PayloadRulesForm;
   upstreams: UpstreamForm[];
 };
