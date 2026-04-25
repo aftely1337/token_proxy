@@ -1,4 +1,5 @@
 use axum::body::Bytes;
+use axum::http::HeaderMap;
 use futures_util::StreamExt;
 use serde_json::json;
 use std::{sync::Arc, time::Instant};
@@ -9,9 +10,28 @@ use super::super::{
 };
 use super::tool_names::shorten_name_if_needed;
 use super::{
-    chat_request_to_codex, codex_response_to_chat, codex_response_to_responses,
+    apply_codex_headers, chat_request_to_codex, codex_response_to_chat, codex_response_to_responses,
     responses_request_to_codex, stream_codex_to_chat, stream_codex_to_responses,
 };
+
+#[test]
+fn apply_codex_headers_uses_current_cli_version_fallbacks() {
+    let mut headers = HeaderMap::new();
+    let inbound = HeaderMap::new();
+
+    apply_codex_headers(&mut headers, &inbound);
+
+    assert_eq!(
+        headers.get("version").and_then(|value| value.to_str().ok()),
+        Some("0.125.0")
+    );
+    assert_eq!(
+        headers
+            .get("user-agent")
+            .and_then(|value| value.to_str().ok()),
+        Some("codex_cli_rs/0.125.0 (Windows 11; x64)")
+    );
+}
 
 #[test]
 fn chat_request_to_codex_sets_model_and_stream() {

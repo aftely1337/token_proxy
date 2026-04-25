@@ -1,8 +1,8 @@
 use axum::http::header::{HeaderName, HeaderValue};
 use axum::http::HeaderMap;
-const HEADER_VERSION: &str = "0.21.0";
+const HEADER_VERSION: &str = "0.125.0";
 const HEADER_OPENAI_BETA: &str = "responses=experimental";
-const DEFAULT_USER_AGENT: &str = "codex_cli_rs/0.50.0 (Mac OS 26.0.1; arm64) Apple_Terminal/464";
+const DEFAULT_USER_AGENT: &str = "codex_cli_rs/0.125.0 (Windows 11; x64)";
 
 const HEADER_VERSION_NAME: HeaderName = HeaderName::from_static("version");
 const HEADER_OPENAI_BETA_NAME: HeaderName = HeaderName::from_static("openai-beta");
